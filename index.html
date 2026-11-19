@@ -1,0 +1,2436 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Binance Top 500 起漲／起跌點即時量化評分終端</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans TC"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            terminal: {
+              bg: '#060a13',
+              panel: '#0c1322',
+              card: '#10192b',
+              border: '#1e2c45',
+              hover: '#16233b',
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background-color: #060a13;
+      color: #e2e8f0;
+      font-family: "Noto Sans TC", system-ui, sans-serif;
+      overflow-x: hidden;
+    }
+    .font-mono-num {
+      font-family: "JetBrains Mono", monospace;
+      font-variant-numeric: tabular-nums;
+    }
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background: #080d18; }
+    ::-webkit-scrollbar-thumb { background: #233352; border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334a75; }
+
+    @keyframes pulse-s-long {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45), inset 0 0 12px rgba(16, 185, 129, 0.14); border-color: rgba(16, 185, 129, 0.85); }
+      50% { box-shadow: 0 0 22px 2px rgba(16, 185, 129, 0.35), inset 0 0 18px rgba(16, 185, 129, 0.25); border-color: rgba(52, 211, 153, 1); }
+    }
+    @keyframes pulse-s-short {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.45), inset 0 0 12px rgba(244, 63, 94, 0.14); border-color: rgba(244, 63, 94, 0.85); }
+      50% { box-shadow: 0 0 22px 2px rgba(244, 63, 94, 0.35), inset 0 0 18px rgba(244, 63, 94, 0.25); border-color: rgba(251, 113, 133, 1); }
+    }
+    .s-tier-long { animation: pulse-s-long 2.2s infinite ease-in-out; }
+    .s-tier-short { animation: pulse-s-short 2.2s infinite ease-in-out; }
+
+    .led-strong-long {
+      background: rgba(16, 185, 129, 0.22);
+      border: 1px solid rgba(16, 185, 129, 0.8);
+      color: #34d399;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.35);
+    }
+    .led-long {
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.38);
+      color: #6ee7b7;
+    }
+    .led-strong-short {
+      background: rgba(244, 63, 94, 0.22);
+      border: 1px solid rgba(244, 63, 94, 0.8);
+      color: #fb7185;
+      box-shadow: 0 0 8px rgba(244, 63, 94, 0.35);
+    }
+    .led-short {
+      background: rgba(244, 63, 94, 0.1);
+      border: 1px solid rgba(244, 63, 94, 0.38);
+      color: #fda4af;
+    }
+    .led-neutral {
+      background: rgba(100, 116, 139, 0.14);
+      border: 1px solid rgba(100, 116, 139, 0.35);
+      color: #94a3b8;
+    }
+
+    .floating-tooltip {
+      position: fixed;
+      z-index: 9999;
+      pointer-events: none;
+      max-width: 340px;
+      background: rgba(10, 16, 30, 0.98);
+      border: 1px solid #2b3f66;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 12px;
+      backdrop-filter: blur(10px);
+      display: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Global Floating Tooltip -->
+  <div id="globalTooltip" class="floating-tooltip"></div>
+
+  <!-- Top Navigation & Status Header -->
+  <header class="sticky top-0 z-40 bg-[#080e1b]/95 backdrop-blur-md border-b border-terminal-border">
+    <div class="max-w-[1680px] mx-auto px-4 py-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <!-- Brand -->
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/25 via-cyan-500/20 to-blue-600/25 border border-emerald-500/40 flex items-center justify-center shadow-lg shadow-emerald-950/40">
+            <svg class="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h1 class="text-base sm:text-lg font-extrabold tracking-tight text-white">
+                BINANCE TOP 500 量化起漲／起跌評分終端
+              </h1>
+              <span class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                <span id="liveDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                100% 幣安真實即時數據
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">
+              SMC 流動性獵取(25) + 8大指標背離(30) + CHoCH 結構(15) + 斐波那契風控(15) + 5週期進場燈號(15)
+            </p>
+          </div>
+        </div>
+
+        <!-- Primary Controls -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Market Type -->
+          <div class="flex bg-terminal-panel border border-terminal-border rounded-lg p-0.5 text-xs">
+            <button id="btnMarketFutures" onclick="switchMarket('futures')" class="px-2.5 py-1.5 rounded-md font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 transition">
+              U本位合約
+            </button>
+            <button id="btnMarketSpot" onclick="switchMarket('spot')" class="px-2.5 py-1.5 rounded-md font-semibold text-slate-400 hover:text-white transition">
+              現貨市場
+            </button>
+          </div>
+
+          <!-- Main Timeframe -->
+          <select id="selectMainTf" onchange="onConfigChange()" class="bg-terminal-panel border border-terminal-border text-xs text-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:border-cyan-500">
+            <option value="30m" selected>主週期: 30m (確認 15m)</option>
+            <option value="1h">主週期: 1h (確認 15m)</option>
+          </select>
+
+          <!-- Scan Depth -->
+          <select id="selectTopN" onchange="onConfigChange()" class="bg-terminal-panel border border-terminal-border text-xs text-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:border-cyan-500">
+            <option value="50">掃描前 50 大</option>
+            <option value="150" selected>掃描前 150 大</option>
+            <option value="300">掃描前 300 大</option>
+            <option value="500">掃描前 500 大</option>
+          </select>
+
+          <!-- Auto Refresh -->
+          <select id="selectAutoRefresh" onchange="setupAutoRefresh()" class="bg-terminal-panel border border-terminal-border text-xs text-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:border-cyan-500">
+            <option value="0" selected>自動刷新: 關</option>
+            <option value="120">每 2 分鐘刷新</option>
+            <option value="300">每 5 分鐘刷新</option>
+          </select>
+
+          <!-- Action Buttons -->
+          <button id="btnStartScan" onclick="startFullScan()" class="px-3.5 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1.5 shadow-lg shadow-emerald-950/50">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            重新掃描
+          </button>
+          <button id="btnPauseScan" onclick="togglePauseScan()" class="px-3 py-2 rounded-lg text-xs font-semibold bg-terminal-panel hover:bg-terminal-hover border border-terminal-border text-amber-300 transition hidden">
+            暫停
+          </button>
+          <button onclick="openSettingsModal()" class="px-2.5 py-2 rounded-lg text-xs font-semibold bg-terminal-panel hover:bg-terminal-hover border border-terminal-border text-slate-300 transition" title="API 連線與代理設定">
+            ⚙️ API 設定
+          </button>
+        </div>
+      </div>
+
+      <!-- Progress & Real-Time Metrics Bar -->
+      <div class="mt-3 pt-2.5 border-t border-terminal-border/70 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div class="flex items-center gap-3 flex-1 min-w-[260px]">
+          <div class="flex-1 max-w-md">
+            <div class="flex justify-between text-[11px] mb-1">
+              <span id="scanStatusText" class="text-cyan-300 font-medium">正在初始化幣安真實行情連線...</span>
+              <span id="scanProgressCount" class="font-mono-num text-slate-400">0 / 0</span>
+            </div>
+            <div class="w-full h-1.5 bg-slate-800/90 rounded-full overflow-hidden">
+              <div id="scanProgressBar" class="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-300" style="width: 0%"></div>
+            </div>
+          </div>
+          <span id="apiEndpointBadge" class="hidden md:inline-flex items-center px-2 py-1 rounded bg-slate-900 border border-slate-800 text-[11px] font-mono-num text-slate-400">
+            fapi.binance.com
+          </span>
+        </div>
+
+        <!-- Summary KPI Pills -->
+        <div class="flex flex-wrap items-center gap-2 font-mono-num">
+          <div class="px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-300">
+            S級(≥85): <strong id="kpiS">0</strong>
+          </div>
+          <div class="px-2.5 py-1 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
+            A級(70-84): <strong id="kpiA">0</strong>
+          </div>
+          <div class="px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300">
+            B級(50-69): <strong id="kpiB">0</strong>
+          </div>
+          <div class="px-2.5 py-1 rounded-md bg-slate-800/70 border border-slate-700 text-slate-300">
+            5/5全燈共振: <strong id="kpiFullLight" class="text-white">0</strong>
+          </div>
+          <div class="px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 text-slate-400">
+            更新: <span id="lastUpdateTime">--:--:--</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Error Banner (shown only on network/CORS failure) -->
+  <div id="errorBanner" class="hidden max-w-[1680px] w-full mx-auto px-4 mt-3">
+    <div class="bg-rose-950/60 border border-rose-500/50 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-rose-200">
+      <div class="flex items-start gap-2.5">
+        <span class="text-base">⚠️</span>
+        <div>
+          <p class="font-bold text-rose-100" id="errorTitle">幣安 API 連線異常</p>
+          <p class="text-rose-300/90 mt-0.5" id="errorDetail">無法直接連線至幣安伺服器，請檢查網路環境、切換「現貨市場」，或點選右上角「⚙️ API 設定」填寫自訂代理前綴（本系統堅持 100% 真實數據，絕不使用模擬假資料）。</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="openSettingsModal()" class="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/50 font-semibold text-white">開啟 API 設定</button>
+        <button onclick="startFullScan()" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 font-semibold text-white">重試連線</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Workspace -->
+  <main class="max-w-[1680px] w-full mx-auto px-4 py-4 flex-1">
+    <!-- Filter, Radar Mode & Priority Search Toolbar -->
+    <section class="bg-terminal-panel border border-terminal-border rounded-xl p-3 mb-4 flex flex-wrap items-center justify-between gap-3">
+      <!-- Radar Mode Tabs -->
+      <div class="flex flex-wrap items-center gap-1.5">
+        <button id="tabModeBest" onclick="setRadarMode('best')" class="px-3.5 py-2 rounded-lg text-xs font-bold transition bg-gradient-to-r from-cyan-600/30 to-emerald-600/30 text-white border border-cyan-400/60">
+          🔥 綜合進場排行 (最高分優先)
+        </button>
+        <button id="tabModeLong" onclick="setRadarMode('long')" class="px-3.5 py-2 rounded-lg text-xs font-bold transition bg-terminal-card text-slate-300 border border-terminal-border hover:border-emerald-500/50 hover:text-emerald-300">
+          📈 起漲點雷達 (Long)
+        </button>
+        <button id="tabModeShort" onclick="setRadarMode('short')" class="px-3.5 py-2 rounded-lg text-xs font-bold transition bg-terminal-card text-slate-300 border border-terminal-border hover:border-rose-500/50 hover:text-rose-300">
+          📉 起跌點雷達 (Short)
+        </button>
+      </div>
+
+      <!-- Search + Filters + View Toggle -->
+      <div class="flex flex-wrap items-center gap-2 flex-1 justify-end">
+        <!-- Priority Search -->
+        <div class="relative min-w-[210px] flex-1 max-w-xs">
+          <input id="searchInput" type="text" placeholder="搜尋幣種並優先掃描 (如 BTC, SOL, PEPE)..."
+            oninput="onSearchInput()" onkeydown="if(event.key==='Enter') prioritizeSearchSymbol()"
+            class="w-full bg-[#070d19] border border-terminal-border rounded-lg pl-8 pr-16 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+          <svg class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <button onclick="prioritizeSearchSymbol()" class="absolute right-1.5 top-1 px-2 py-1 text-[10px] font-bold rounded bg-cyan-500/20 hover:bg-cyan-500/35 text-cyan-300 border border-cyan-500/30">
+            插隊抓
+          </button>
+        </div>
+
+        <!-- Grade Filter -->
+        <select id="filterGrade" onchange="renderDashboard()" class="bg-[#070d19] border border-terminal-border text-xs text-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:border-cyan-500">
+          <option value="ALL" selected>顯示: 全部已評分幣種</option>
+          <option value="S">僅 S 級 (85~100分)</option>
+          <option value="A">A 級以上 (≥70分)</option>
+          <option value="B">B 級以上 (≥50分)</option>
+        </select>
+
+        <!-- Sort Select -->
+        <select id="sortBy" onchange="renderDashboard()" class="bg-[#070d19] border border-terminal-border text-xs text-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:border-cyan-500">
+          <option value="score" selected>排序: 進場評分 (高→低)</option>
+          <option value="lights">排序: 5週期燈號共振</option>
+          <option value="div">排序: 8大指標背離數</option>
+          <option value="volume">排序: 24h 成交額</option>
+          <option value="change">排序: 24h 漲跌幅</option>
+        </select>
+
+        <!-- View Switch -->
+        <div class="flex bg-[#070d19] border border-terminal-border rounded-lg p-0.5 text-xs">
+          <button id="btnViewTable" onclick="setViewMode('table')" class="px-2.5 py-1.5 rounded-md font-semibold bg-slate-700/80 text-white">
+            表格排行
+          </button>
+          <button id="btnViewCard" onclick="setViewMode('card')" class="px-2.5 py-1.5 rounded-md font-semibold text-slate-400 hover:text-white">
+            策略卡片
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Legend Strip -->
+    <div class="mb-3 px-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+      <div class="flex flex-wrap items-center gap-3">
+        <span class="font-semibold text-slate-300">五週期多空進場燈號說明：</span>
+        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm led-strong-long inline-block"></span> 強多進場</span>
+        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm led-long inline-block"></span> 偏多趨勢</span>
+        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm led-neutral inline-block"></span> 盤整觀望</span>
+        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm led-short inline-block"></span> 偏空趨勢</span>
+        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm led-strong-short inline-block"></span> 強空進場</span>
+        <span class="text-cyan-400/90 hidden sm:inline">（滑鼠懸停在燈號或背離標籤可檢視精確數值，點擊幣種開啟互動 K 線圖）</span>
+      </div>
+      <div id="visibleCountText" class="font-mono-num text-slate-400">顯示 0 筆</div>
+    </div>
+
+    <!-- Table View Container -->
+    <section id="tableViewContainer" class="bg-terminal-panel border border-terminal-border rounded-xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse min-w-[1220px]">
+          <thead>
+            <tr class="bg-[#09101f] border-b border-terminal-border text-[11px] uppercase tracking-wider text-slate-400">
+              <th class="py-3 px-3 w-12 text-center">#</th>
+              <th class="py-3 px-3">幣種 / 現價 / 24h成交額</th>
+              <th class="py-3 px-3 w-48">進場評分 (0~100)</th>
+              <th class="py-3 px-3 w-64">多空進場燈號 (1h · 4h · 1d · 3d · 7d)</th>
+              <th class="py-3 px-3 w-36">8大指標背離</th>
+              <th class="py-3 px-3 w-48">SMC 流動性 / CHoCH</th>
+              <th class="py-3 px-3">自動進出場風控 (Entry / Stop / T1~T3)</th>
+              <th class="py-3 px-3 w-24 text-right">診斷</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-terminal-border/60 text-xs">
+            <tr>
+              <td colspan="8" class="py-16 text-center text-slate-400">
+                <div class="inline-flex items-center gap-2">
+                  <svg class="w-5 h-5 animate-spin text-cyan-400" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                  </svg>
+                  <span>正在連線幣安 API 抓取 24h 前 500 大真實交易對與 K 線數據...</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Card View Container -->
+    <section id="cardViewContainer" class="hidden grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></section>
+
+    <!-- Load More Button for Large Lists -->
+    <div id="loadMoreWrap" class="hidden mt-4 text-center">
+      <button onclick="showMoreRows()" class="px-5 py-2 rounded-lg text-xs font-semibold bg-terminal-panel hover:bg-terminal-hover border border-terminal-border text-cyan-300 transition">
+        顯示更多幣種
+      </button>
+    </div>
+  </main>
+
+  <!-- Detail Slide-Over Drawer -->
+  <div id="detailDrawerBackdrop" onclick="closeDetailDrawer()" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden"></div>
+  <aside id="detailDrawer" class="fixed top-0 right-0 h-full w-full max-w-3xl bg-[#090f1d] border-l border-terminal-border z-50 transform translate-x-full transition-transform duration-300 flex flex-col shadow-2xl">
+    <!-- Drawer Header -->
+    <div class="p-4 border-b border-terminal-border flex items-center justify-between gap-3 bg-[#0c1426]">
+      <div class="flex items-center gap-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 id="drawerSymbol" class="text-lg font-extrabold text-white font-mono-num">BTCUSDT</h2>
+            <span id="drawerDirectionBadge" class="px-2 py-0.5 rounded text-xs font-bold"></span>
+            <span id="drawerGradeBadge" class="px-2 py-0.5 rounded text-xs font-bold"></span>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400 mt-0.5 font-mono-num">
+            <span>現價: <strong id="drawerPrice" class="text-white">--</strong></span>
+            <span id="drawerChange">--</span>
+            <span>24h額: <span id="drawerVol">--</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="copyTradePlan()" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 text-cyan-300 transition">
+          📋 複製交易計畫
+        </button>
+        <a id="drawerBinanceLink" href="#" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 transition">
+          ↗ 幣安看盤
+        </a>
+        <button onclick="closeDetailDrawer()" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300">
+          ✕
+        </button>
+      </div>
+    </div>
+
+    <!-- Drawer Scrollable Body -->
+    <div class="flex-1 overflow-y-auto p-4 space-y-4">
+      <!-- Interactive Chart Panel -->
+      <div class="bg-terminal-panel border border-terminal-border rounded-xl p-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <div class="flex items-center gap-1" id="chartTfButtons">
+            <button onclick="switchChartTf('15m')" data-tf="15m" class="chart-tf-btn px-2 py-1 rounded text-[11px] font-mono-num font-semibold bg-slate-800 text-slate-300">15m</button>
+            <button onclick="switchChartTf('30m')" data-tf="30m" class="chart-tf-btn px-2 py-1 rounded text-[11px] font-mono-num font-semibold bg-cyan-600 text-white">30m</button>
+            <button onclick="switchChartTf('1h')" data-tf="1h" class="chart-tf-btn px-2 py-1 rounded text-[11px] font-mono-num font-semibold bg-slate-800 text-slate-300">1h</button>
+            <button onclick="switchChartTf('4h')" data-tf="4h" class="chart-tf-btn px-2 py-1 rounded text-[11px] font-mono-num font-semibold bg-slate-800 text-slate-300">4h</button>
+            <button onclick="switchChartTf('1d')" data-tf="1d" class="chart-tf-btn px-2 py-1 rounded text-[11px] font-mono-num font-semibold bg-slate-800 text-slate-300">1d</button>
+            <button onclick="switchChartTf('3d')" data-tf="3d" class="chart-tf-btn px-2 py-1 rounded text-[11px] font-mono-num font-semibold bg-slate-800 text-slate-300">3d</button>
+          </div>
+          <div id="chartOhlcReadout" class="text-[11px] font-mono-num text-slate-400">
+            移動滑鼠檢視 K 線 OHLCV
+          </div>
+        </div>
+        <div class="relative w-full h-[300px] bg-[#060a13] rounded-lg border border-slate-800/80 overflow-hidden">
+          <canvas id="klineCanvas" class="w-full h-full block"></canvas>
+        </div>
+        <div class="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-400 font-mono-num" id="chartLegendStrip"></div>
+      </div>
+
+      <!-- Dual Score Comparison & 5-Module Breakdown -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="bg-terminal-panel border border-terminal-border rounded-xl p-3.5">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-bold text-slate-200">五大模組即時評分拆解 (滿分 100)</h3>
+            <div class="flex gap-1.5 text-[11px] font-mono-num">
+              <button id="drawerSideLongBtn" onclick="switchDrawerSide('long')" class="px-2 py-0.5 rounded border">多頭: <span id="drawerLongTotal">0</span></button>
+              <button id="drawerSideShortBtn" onclick="switchDrawerSide('short')" class="px-2 py-0.5 rounded border">空頭: <span id="drawerShortTotal">0</span></button>
+            </div>
+          </div>
+          <div id="drawerBreakdownBars" class="space-y-2.5 text-xs"></div>
+        </div>
+
+        <!-- Trade Execution Box -->
+        <div class="bg-terminal-panel border border-terminal-border rounded-xl p-3.5 flex flex-col justify-between">
+          <div>
+            <h3 class="text-xs font-bold text-slate-200 mb-2">Cypher 諧波 / 斐波那契風控計畫</h3>
+            <div id="drawerLevelsGrid" class="grid grid-cols-2 gap-2 text-xs font-mono-num"></div>
+          </div>
+          <div id="drawerSmcLevels" class="mt-3 pt-2.5 border-t border-terminal-border/70 text-[11px] font-mono-num text-slate-400 grid grid-cols-2 gap-1.5"></div>
+        </div>
+      </div>
+
+      <!-- 5-Timeframe Entry Light Matrix -->
+      <div class="bg-terminal-panel border border-terminal-border rounded-xl p-3.5">
+        <h3 class="text-xs font-bold text-slate-200 mb-2.5">多週期進場燈號深度矩陣 (1h · 4h · 1d · 3d · 7d)</h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs font-mono-num">
+            <thead>
+              <tr class="text-[11px] text-slate-400 border-b border-terminal-border">
+                <th class="py-1.5 text-left">週期</th>
+                <th class="py-1.5 text-left">進場燈號</th>
+                <th class="py-1.5 text-left">EMA 9/21</th>
+                <th class="py-1.5 text-right">RSI(14)</th>
+                <th class="py-1.5 text-right">MACD柱</th>
+                <th class="py-1.5 text-right">MFI(14)</th>
+                <th class="py-1.5 text-right">OBV動能</th>
+              </tr>
+            </thead>
+            <tbody id="drawerTfTableBody" class="divide-y divide-terminal-border/50"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 8-Indicator Divergence Detail -->
+      <div class="bg-terminal-panel border border-terminal-border rounded-xl p-3.5">
+        <div class="flex items-center justify-between mb-2.5">
+          <h3 class="text-xs font-bold text-slate-200">8 大指標量價／動能背離明細 (Pivot L=5, R=2)</h3>
+          <span id="drawerDivSummary" class="text-xs font-mono-num font-bold text-cyan-300"></span>
+        </div>
+        <div id="drawerDivCards" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- API Settings Modal -->
+  <div id="settingsModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-[#0c1426] border border-terminal-border rounded-2xl max-w-lg w-full p-5 shadow-2xl">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-sm font-bold text-white">⚙️ 幣安 API 連線與並發設定</h3>
+        <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">自訂 CORS 代理前綴（選填，預設空白直連幣安官方）</label>
+          <input id="inputProxyPrefix" type="text" placeholder="例如: https://your-worker.workers.dev/?url="
+            class="w-full bg-[#060a13] border border-terminal-border rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-cyan-500" />
+          <p class="text-[11px] text-slate-400 mt-1">
+            通常本機直接雙擊開啟 `index.html` 即可直連幣安公開 API（支援 CORS）。若公司網路或地區封鎖幣安域名，可填入自建 Cloudflare Worker 代理前綴。
+          </p>
+        </div>
+        <div>
+          <label class="block text-slate-300 font-semibold mb-1">同時並發抓取數 (Workers: 2 ~ 8)</label>
+          <input id="inputConcurrency" type="number" min="2" max="8" value="5"
+            class="w-28 bg-[#060a13] border border-terminal-border rounded-lg px-3 py-2 text-white font-mono-num focus:outline-none focus:border-cyan-500" />
+          <span class="text-[11px] text-slate-400 ml-2">預設 5（兼顧速度與避免觸發幣安 429 限速）</span>
+        </div>
+        <div class="p-3 rounded-lg bg-slate-900/80 border border-slate-800 text-[11px] text-slate-300 space-y-1">
+          <p class="font-bold text-cyan-300">真實數據架構說明：</p>
+          <p>• U本位合約直連：<span class="font-mono-num text-emerald-300">https://fapi.binance.com</span></p>
+          <p>• 現貨市場直連：<span class="font-mono-num text-emerald-300">https://data-api.binance.vision</span>（備援 api.binance.com）</p>
+          <p>• 每幣種抓取真實 <span class="font-mono-num">15m / 1h / 1d</span> K 線並精準重採樣 UTC 對齊 <span class="font-mono-num">30m / 4h / 3d / 7d</span>。</p>
+        </div>
+      </div>
+      <div class="mt-4 flex justify-end gap-2">
+        <button onclick="closeSettingsModal()" class="px-3.5 py-2 rounded-lg text-xs bg-slate-800 hover:bg-slate-700 text-slate-200">取消</button>
+        <button onclick="saveSettings()" class="px-4 py-2 rounded-lg text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white">儲存並重新掃描</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toastMsg" class="fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xl hidden"></div>
+
+<script>
+/* ============================================================================
+ *  BINANCE TOP 500 REAL-TIME QUANTITATIVE SCORING ENGINE
+ *  100% Real Binance Public REST API Data — Zero Mock/Simulated Data
+ * ============================================================================ */
+
+const STABLECOIN_BASES = new Set([
+  'USDC','FDUSD','TUSD','BUSD','DAI','USDP','USDE','USD1','USDD','PYUSD',
+  'EUR','GBP','AUD','TRY','BRL','RUB','UAH','ZAR','AEUR','EURI','XUSD',
+  'RLUSD','BFUSD','SUSD','USTC','GUSD','PAX','HUSD','VAI','CUSD','USDJ'
+]);
+
+const LEVERAGED_SUFFIXES = ['UP','DOWN','BULL','BEAR'];
+
+const STATE = {
+  market: 'futures', // 'futures' | 'spot'
+  mainTf: '30m',     // '30m' | '1h'
+  topN: 150,
+  radarMode: 'best', // 'best' | 'long' | 'short'
+  viewMode: 'table', // 'table' | 'card'
+  concurrency: 5,
+  proxyPrefix: '',
+  autoRefreshTimer: null,
+
+  // Real-time scan runtime
+  scanId: 0,
+  isScanning: false,
+  isPaused: false,
+  allRankedTickers: [], // Up to Top 500 from Binance 24hr ticker
+  queue: [],
+  completedCount: 0,
+  totalToScan: 0,
+  failedCount: 0,
+
+  // Map<symbol, AnalysisResult>
+  results: new Map(),
+  renderLimit: 80,
+
+  // Active drawer state
+  drawerSymbol: null,
+  drawerSide: 'long',
+  drawerChartTf: '30m',
+  chartHoverIdx: -1
+};
+
+// Load saved settings from localStorage
+try {
+  const savedProxy = localStorage.getItem('bn_quant_proxy');
+  const savedConc = localStorage.getItem('bn_quant_conc');
+  if (savedProxy) STATE.proxyPrefix = savedProxy;
+  if (savedConc) STATE.concurrency = Math.min(8, Math.max(2, parseInt(savedConc, 10) || 5));
+} catch (_) {}
+
+/* ===================== BINANCE REAL API LAYER ===================== */
+
+function getEndpoints(market) {
+  if (market === 'futures') {
+    return ['https://fapi.binance.com'];
+  }
+  return ['https://data-api.binance.vision', 'https://api.binance.com'];
+}
+
+function buildUrl(base, path) {
+  const full = base + path;
+  if (STATE.proxyPrefix && STATE.proxyPrefix.trim().length > 0) {
+    const p = STATE.proxyPrefix.trim();
+    return p.includes('?') || p.endsWith('=') ? p + encodeURIComponent(full) : p + full;
+  }
+  return full;
+}
+
+async function fetchJsonWithRetry(paths, retries = 3) {
+  const bases = getEndpoints(STATE.market);
+  let lastErr = null;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    for (const base of bases) {
+      const url = buildUrl(base, paths);
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timer);
+        if (res.status === 429 || res.status === 418) {
+          const waitMs = 1500 * Math.pow(2, attempt);
+          await sleep(waitMs);
+          lastErr = new Error(`HTTP ${res.status} Rate Limited`);
+          continue;
+        }
+        if (!res.ok) {
+          lastErr = new Error(`HTTP ${res.status}`);
+          continue;
+        }
+        const data = await res.json();
+        document.getElementById('apiEndpointBadge').textContent = new URL(base).host;
+        return data;
+      } catch (err) {
+        lastErr = err;
+      }
+    }
+    await sleep(400 * (attempt + 1));
+  }
+  throw lastErr || new Error('Network request failed');
+}
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+function isValidUsdtPair(symbol) {
+  if (!symbol || !symbol.endsWith('USDT')) return false;
+  if (symbol.includes('_')) return false; // Exclude quarterly delivery contracts
+  const base = symbol.slice(0, -4);
+  if (!base || STABLECOIN_BASES.has(base)) return false;
+  if (STATE.market === 'spot') {
+    for (const suf of LEVERAGED_SUFFIXES) {
+      if (base.endsWith(suf) && base.length > suf.length + 1) return false;
+    }
+  }
+  return true;
+}
+
+async function fetchTop500Tickers() {
+  const path = STATE.market === 'futures' ? '/fapi/v1/ticker/24hr' : '/api/v3/ticker/24hr';
+  const raw = await fetchJsonWithRetry(path, 3);
+  const filtered = raw
+    .filter(t => isValidUsdtPair(t.symbol) && parseFloat(t.lastPrice) > 0 && parseFloat(t.quoteVolume) > 0)
+    .map(t => ({
+      symbol: t.symbol,
+      price: parseFloat(t.lastPrice),
+      changePct: parseFloat(t.priceChangePercent),
+      quoteVolume: parseFloat(t.quoteVolume),
+      high24h: parseFloat(t.highPrice),
+      low24h: parseFloat(t.lowPrice)
+    }))
+    .sort((a, b) => b.quoteVolume - a.quoteVolume)
+    .slice(0, 500);
+  return filtered;
+}
+
+function parseKlines(raw) {
+  return raw.map(k => ({
+    time: Number(k[0]),
+    open: parseFloat(k[1]),
+    high: parseFloat(k[2]),
+    low: parseFloat(k[3]),
+    close: parseFloat(k[4]),
+    volume: parseFloat(k[5]),
+    closeTime: Number(k[6])
+  }));
+}
+
+async function fetchSymbolKlines(symbol) {
+  const prefix = STATE.market === 'futures' ? '/fapi/v1/klines' : '/api/v3/klines';
+  const [r15m, r1h, r1d] = await Promise.all([
+    fetchJsonWithRetry(`${prefix}?symbol=${symbol}&interval=15m&limit=140`, 3),
+    fetchJsonWithRetry(`${prefix}?symbol=${symbol}&interval=1h&limit=210`, 3),
+    fetchJsonWithRetry(`${prefix}?symbol=${symbol}&interval=1d&limit=120`, 3)
+  ]);
+  return {
+    '15m': parseKlines(r15m),
+    '1h': parseKlines(r1h),
+    '1d': parseKlines(r1d)
+  };
+}
+
+/* ===================== EXACT UTC RESAMPLING ===================== */
+
+function resampleKlines(candles, bucketFn) {
+  if (!candles || !candles.length) return [];
+  const map = new Map();
+  for (const c of candles) {
+    const key = bucketFn(c.time);
+    const prev = map.get(key);
+    if (!prev) {
+      map.set(key, {
+        time: c.time,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+        volume: c.volume,
+        closeTime: c.closeTime
+      });
+    } else {
+      if (c.high > prev.high) prev.high = c.high;
+      if (c.low < prev.low) prev.low = c.low;
+      prev.close = c.close;
+      prev.volume += c.volume;
+      prev.closeTime = c.closeTime;
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => a.time - b.time);
+}
+
+function buildAllTimeframes(rawMap) {
+  const k15m = rawMap['15m'];
+  const k1h = rawMap['1h'];
+  const k1d = rawMap['1d'];
+  const k30m = resampleKlines(k15m, t => Math.floor(t / (30 * 60000)));
+  const k4h  = resampleKlines(k1h,  t => Math.floor(t / (4 * 3600000)));
+  const k3d  = resampleKlines(k1d,  t => Math.floor(t / (3 * 86400000)));
+  // Align weekly buckets to UTC Monday 00:00 (1970-01-01 was Thursday -> +3 days aligns to Monday)
+  const k7d  = resampleKlines(k1d,  t => Math.floor((t + 3 * 86400000) / (7 * 86400000)));
+  return { '15m': k15m, '30m': k30m, '1h': k1h, '4h': k4h, '1d': k1d, '3d': k3d, '7d': k7d };
+}
+
+/* ===================== TECHNICAL INDICATORS ===================== */
+
+function calcSMA(arr, period) {
+  const out = new Array(arr.length).fill(null);
+  let sum = 0;
+  for (let i = 0; i < arr.length; i++) {
+    sum += arr[i];
+    if (i >= period) sum -= arr[i - period];
+    if (i >= period - 1) out[i] = sum / period;
+  }
+  return out;
+}
+
+function calcEMA(arr, period) {
+  const out = new Array(arr.length).fill(null);
+  if (arr.length < period) return out;
+  const k = 2 / (period + 1);
+  let sum = 0;
+  for (let i = 0; i < period; i++) sum += arr[i];
+  let ema = sum / period;
+  out[period - 1] = ema;
+  for (let i = period; i < arr.length; i++) {
+    ema = (arr[i] - ema) * k + ema;
+    out[i] = ema;
+  }
+  return out;
+}
+
+function calcATR(candles, period = 14) {
+  const n = candles.length;
+  const tr = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    if (i === 0) {
+      tr[i] = candles[i].high - candles[i].low;
+    } else {
+      const h = candles[i].high, l = candles[i].low, pc = candles[i - 1].close;
+      tr[i] = Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc));
+    }
+  }
+  const atr = new Array(n).fill(null);
+  if (n < period) return atr;
+  let sum = 0;
+  for (let i = 0; i < period; i++) sum += tr[i];
+  let prev = sum / period;
+  atr[period - 1] = prev;
+  for (let i = period; i < n; i++) {
+    prev = (prev * (period - 1) + tr[i]) / period;
+    atr[i] = prev;
+  }
+  return atr;
+}
+
+function calcRSI(closes, period = 14) {
+  const n = closes.length;
+  const out = new Array(n).fill(null);
+  if (n <= period) return out;
+  let gainSum = 0, lossSum = 0;
+  for (let i = 1; i <= period; i++) {
+    const diff = closes[i] - closes[i - 1];
+    if (diff >= 0) gainSum += diff; else lossSum -= diff;
+  }
+  let avgGain = gainSum / period;
+  let avgLoss = lossSum / period;
+  out[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  for (let i = period + 1; i < n; i++) {
+    const diff = closes[i] - closes[i - 1];
+    const gain = diff > 0 ? diff : 0;
+    const loss = diff < 0 ? -diff : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+    out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  }
+  return out;
+}
+
+function calcMACD(closes, fast = 12, slow = 26, sig = 9) {
+  const emaFast = calcEMA(closes, fast);
+  const emaSlow = calcEMA(closes, slow);
+  const macdLine = closes.map((_, i) =>
+    emaFast[i] !== null && emaSlow[i] !== null ? emaFast[i] - emaSlow[i] : null
+  );
+  const validStart = macdLine.findIndex(v => v !== null);
+  const signalLine = new Array(closes.length).fill(null);
+  const hist = new Array(closes.length).fill(null);
+  if (validStart !== -1 && closes.length - validStart >= sig) {
+    const sub = macdLine.slice(validStart);
+    const sigSub = calcEMA(sub, sig);
+    for (let i = 0; i < sigSub.length; i++) {
+      if (sigSub[i] !== null) {
+        signalLine[validStart + i] = sigSub[i];
+        hist[validStart + i] = macdLine[validStart + i] - sigSub[i];
+      }
+    }
+  }
+  return { macd: macdLine, signal: signalLine, hist };
+}
+
+function calcOBV(candles) {
+  const out = new Array(candles.length).fill(0);
+  for (let i = 1; i < candles.length; i++) {
+    if (candles[i].close > candles[i - 1].close) out[i] = out[i - 1] + candles[i].volume;
+    else if (candles[i].close < candles[i - 1].close) out[i] = out[i - 1] - candles[i].volume;
+    else out[i] = out[i - 1];
+  }
+  return out;
+}
+
+function calcVWMACD(candles, fast = 12, slow = 26) {
+  const pv = candles.map(c => c.close * c.volume);
+  const vols = candles.map(c => c.volume);
+  const pvFast = calcEMA(pv, fast);
+  const vFast = calcEMA(vols, fast);
+  const pvSlow = calcEMA(pv, slow);
+  const vSlow = calcEMA(vols, slow);
+  return candles.map((_, i) => {
+    if (pvFast[i] === null || pvSlow[i] === null || !vFast[i] || !vSlow[i]) return null;
+    return (pvFast[i] / vFast[i]) - (pvSlow[i] / vSlow[i]);
+  });
+}
+
+function calcMFI(candles, period = 14) {
+  const n = candles.length;
+  const out = new Array(n).fill(null);
+  if (n <= period) return out;
+  const tp = candles.map(c => (c.high + c.low + c.close) / 3);
+  const rmf = candles.map((c, i) => tp[i] * c.volume);
+  for (let i = period; i < n; i++) {
+    let pos = 0, neg = 0;
+    for (let j = i - period + 1; j <= i; j++) {
+      if (tp[j] > tp[j - 1]) pos += rmf[j];
+      else if (tp[j] < tp[j - 1]) neg += rmf[j];
+    }
+    if (neg === 0) out[i] = pos === 0 ? 50 : 100;
+    else out[i] = 100 - 100 / (1 + pos / neg);
+  }
+  return out;
+}
+
+function calcCCI(candles, period = 10) {
+  const n = candles.length;
+  const tp = candles.map(c => (c.high + c.low + c.close) / 3);
+  const sma = calcSMA(tp, period);
+  const out = new Array(n).fill(null);
+  for (let i = period - 1; i < n; i++) {
+    let md = 0;
+    for (let j = i - period + 1; j <= i; j++) md += Math.abs(tp[j] - sma[i]);
+    md /= period;
+    out[i] = md === 0 ? 0 : (tp[i] - sma[i]) / (0.015 * md);
+  }
+  return out;
+}
+
+function calcMOM(closes, period = 10) {
+  return closes.map((c, i) => (i >= period ? c - closes[i - period] : null));
+}
+
+/* ===================== MODULE 1: SMC LIQUIDITY SWEEP (25 PTS) ===================== */
+
+function computeSmcLevels(k1h) {
+  if (!k1h || k1h.length < 30) return null;
+  const last = k1h[k1h.length - 1];
+  const lastDate = new Date(last.time);
+  const curDayStart = Date.UTC(lastDate.getUTCFullYear(), lastDate.getUTCMonth(), lastDate.getUTCDate());
+  const prevDayStart = curDayStart - 86400000;
+
+  // Week Open (Monday 00:00 UTC)
+  const dayOfWeek = lastDate.getUTCDay(); // 0 Sun, 1 Mon...
+  const diffToMon = (dayOfWeek + 6) % 7;
+  const curWeekStart = curDayStart - diffToMon * 86400000;
+
+  let pdh = -Infinity, pdl = Infinity;
+  let dOpen = null, wOpen = null, nyOpen = null;
+  let asiaHigh = -Infinity, asiaLow = Infinity;
+  let lndnHigh = -Infinity, lndnLow = Infinity;
+
+  // Determine which day's ASIA/LNDN session is most recent
+  const curUtcHour = lastDate.getUTCHours();
+  const asiaTargetDay = curUtcHour >= 1 ? curDayStart : prevDayStart;
+  const lndnTargetDay = curUtcHour >= 9 ? curDayStart : prevDayStart;
+  const nyTargetDay   = curUtcHour >= 13 ? curDayStart : prevDayStart;
+
+  for (const c of k1h) {
+    if (c.time >= prevDayStart && c.time < curDayStart) {
+      if (c.high > pdh) pdh = c.high;
+      if (c.low < pdl) pdl = c.low;
+    }
+    if (dOpen === null && c.time >= curDayStart) dOpen = c.open;
+    if (wOpen === null && c.time >= curWeekStart) wOpen = c.open;
+
+    // ASIA: 00:00 - 08:00 UTC
+    if (c.time >= asiaTargetDay && c.time < asiaTargetDay + 8 * 3600000) {
+      if (c.high > asiaHigh) asiaHigh = c.high;
+      if (c.low < asiaLow) asiaLow = c.low;
+    }
+    // LNDN: 08:00 - 13:00 UTC
+    if (c.time >= lndnTargetDay + 8 * 3600000 && c.time < lndnTargetDay + 13 * 3600000) {
+      if (c.high > lndnHigh) lndnHigh = c.high;
+      if (c.low < lndnLow) lndnLow = c.low;
+    }
+    // NY Open: 13:00 UTC
+    if (c.time === nyTargetDay + 13 * 3600000) {
+      nyOpen = c.open;
+    }
+  }
+
+  return {
+    pdh: isFinite(pdh) ? pdh : null,
+    pdl: isFinite(pdl) ? pdl : null,
+    asiaHigh: isFinite(asiaHigh) ? asiaHigh : null,
+    asiaLow: isFinite(asiaLow) ? asiaLow : null,
+    lndnHigh: isFinite(lndnHigh) ? lndnHigh : null,
+    lndnLow: isFinite(lndnLow) ? lndnLow : null,
+    dOpen, wOpen, nyOpen
+  };
+}
+
+function evaluateSmcModule(candles, levels) {
+  const longRes = { score: 0, tags: [], sweepExtreme: null };
+  const shortRes = { score: 0, tags: [], sweepExtreme: null };
+  if (!levels || candles.length < 5) return { long: longRes, short: shortRes };
+
+  const recent = candles.slice(-3);
+  let longPd = false, longSession = false;
+  let shortPd = false, shortSession = false;
+
+  for (const c of recent) {
+    const range = c.high - c.low;
+    if (range <= 0) continue;
+    const lowerWickRatio = (Math.min(c.open, c.close) - c.low) / range;
+    const upperWickRatio = (c.high - Math.max(c.open, c.close)) / range;
+
+    // Long sweeps (Sweep Low & reclaim + lower wick >= 40%)
+    if (lowerWickRatio >= 0.40) {
+      if (levels.pdl && c.low < levels.pdl && c.close > levels.pdl) {
+        longPd = true;
+        longRes.sweepExtreme = longRes.sweepExtreme ? Math.min(longRes.sweepExtreme, c.low) : c.low;
+      }
+      if ((levels.asiaLow && c.low < levels.asiaLow && c.close > levels.asiaLow) ||
+          (levels.lndnLow && c.low < levels.lndnLow && c.close > levels.lndnLow)) {
+        longSession = true;
+        longRes.sweepExtreme = longRes.sweepExtreme ? Math.min(longRes.sweepExtreme, c.low) : c.low;
+      }
+    }
+
+    // Short sweeps (Sweep High & reclaim + upper wick >= 40%)
+    if (upperWickRatio >= 0.40) {
+      if (levels.pdh && c.high > levels.pdh && c.close < levels.pdh) {
+        shortPd = true;
+        shortRes.sweepExtreme = shortRes.sweepExtreme ? Math.max(shortRes.sweepExtreme, c.high) : c.high;
+      }
+      if ((levels.asiaHigh && c.high > levels.asiaHigh && c.close < levels.asiaHigh) ||
+          (levels.lndnHigh && c.high > levels.lndnHigh && c.close < levels.lndnHigh)) {
+        shortSession = true;
+        shortRes.sweepExtreme = shortRes.sweepExtreme ? Math.max(shortRes.sweepExtreme, c.high) : c.high;
+      }
+    }
+  }
+
+  if (longPd) { longRes.score += 15; longRes.tags.push('刺破 PDL 收回'); }
+  if (longSession) {
+    longRes.score += 10;
+    const hitAsia = recent.some(c => levels.asiaLow && c.low < levels.asiaLow && c.close > levels.asiaLow);
+    longRes.tags.push(hitAsia ? '刺破 ASIA Low' : '刺破 LNDN Low');
+  }
+
+  if (shortPd) { shortRes.score += 15; shortRes.tags.push('刺破 PDH 收回'); }
+  if (shortSession) {
+    shortRes.score += 10;
+    const hitAsia = recent.some(c => levels.asiaHigh && c.high > levels.asiaHigh && c.close < levels.asiaHigh);
+    shortRes.tags.push(hitAsia ? '刺破 ASIA High' : '刺破 LNDN High');
+  }
+
+  // Secondary SMC structural location bonus (max 8 pts if no full sweep yet)
+  const lastC = candles[candles.length - 1];
+  if (longRes.score === 0) {
+    const nearLow = [levels.pdl, levels.asiaLow, levels.lndnLow].filter(Boolean)
+      .some(lv => Math.abs(lastC.close - lv) / lv <= 0.008 && lastC.close >= lv);
+    if (nearLow) { longRes.score += 6; longRes.tags.push('貼近下方流動性支撐'); }
+    else if (levels.dOpen && lastC.close > levels.dOpen && lastC.low <= levels.dOpen) {
+      longRes.score += 4; longRes.tags.push('回踩日開盤價支撐');
+    }
+  }
+  if (shortRes.score === 0) {
+    const nearHigh = [levels.pdh, levels.asiaHigh, levels.lndnHigh].filter(Boolean)
+      .some(lv => Math.abs(lastC.close - lv) / lv <= 0.008 && lastC.close <= lv);
+    if (nearHigh) { shortRes.score += 6; shortRes.tags.push('貼近上方流動性壓力'); }
+    else if (levels.dOpen && lastC.close < levels.dOpen && lastC.high >= levels.dOpen) {
+      shortRes.score += 4; shortRes.tags.push('受阻日開盤價壓力');
+    }
+  }
+
+  longRes.score = Math.min(25, longRes.score);
+  shortRes.score = Math.min(25, shortRes.score);
+  return { long: longRes, short: shortRes };
+}
+
+/* ===================== MODULE 2: 8-INDICATOR DIVERGENCE (30 PTS) ===================== */
+
+function findPivots(candles, left = 5, right = 2) {
+  const pivotLows = [];
+  const pivotHighs = [];
+  for (let i = left; i < candles.length - right; i++) {
+    let isLow = true, isHigh = true;
+    const curL = candles[i].low, curH = candles[i].high;
+    for (let j = i - left; j <= i + right; j++) {
+      if (j === i) continue;
+      if (candles[j].low < curL) isLow = false;
+      if (candles[j].high > curH) isHigh = false;
+    }
+    if (isLow) pivotLows.push(i);
+    if (isHigh) pivotHighs.push(i);
+  }
+  return { pivotLows, pivotHighs };
+}
+
+function evaluateDivergenceModule(candles) {
+  const closes = candles.map(c => c.close);
+  const obv = calcOBV(candles);
+  const vwmacd = calcVWMACD(candles, 12, 26);
+  const mfi = calcMFI(candles, 14);
+  const { macd, hist } = calcMACD(closes, 12, 26, 9);
+  const rsi = calcRSI(closes, 14);
+  const cci = calcCCI(candles, 10);
+  const mom = calcMOM(closes, 10);
+
+  const indicators = [
+    { key: 'OBV',    name: 'OBV 能量潮',    group: '量價核心', weight: 6, arr: obv },
+    { key: 'VWMACD', name: 'VWMACD',        group: '量價核心', weight: 6, arr: vwmacd },
+    { key: 'MFI',    name: 'MFI 資金流',    group: '量價核心', weight: 5, arr: mfi },
+    { key: 'MACD',   name: 'MACD 快線',     group: '動能確認', weight: 3, arr: macd },
+    { key: 'Hist',   name: 'MACD 柱狀圖',   group: '動能確認', weight: 3, arr: hist },
+    { key: 'RSI',    name: 'RSI(14)',       group: '動能確認', weight: 3, arr: rsi },
+    { key: 'CCI',    name: 'CCI(10)',       group: '動能確認', weight: 2, arr: cci },
+    { key: 'MOM',    name: 'MOM(10)',       group: '動能確認', weight: 2, arr: mom }
+  ];
+
+  const { pivotLows, pivotHighs } = findPivots(candles, 5, 2);
+  const lastIdx = candles.length - 1;
+
+  const evalSide = (isLong) => {
+    const pivots = isLong ? pivotLows : pivotHighs;
+    const items = [];
+    let score = 0;
+    let triggeredCount = 0;
+
+    // Require most recent pivot within last 28 bars for timely signal
+    let p2 = null, p1 = null;
+    if (pivots.length >= 2) {
+      const candidate2 = pivots[pivots.length - 1];
+      if (lastIdx - candidate2 <= 28) {
+        p2 = candidate2;
+        for (let k = pivots.length - 2; k >= 0; k--) {
+          const dist = p2 - pivots[k];
+          if (dist >= 5 && dist <= 55) {
+            p1 = pivots[k];
+            break;
+          }
+        }
+      }
+    }
+
+    for (const ind of indicators) {
+      let type = null; // 'regular' | 'hidden' | null
+      let v1 = null, v2 = null;
+      if (p1 !== null && p2 !== null && ind.arr[p1] !== null && ind.arr[p2] !== null) {
+        v1 = ind.arr[p1];
+        v2 = ind.arr[p2];
+        if (isLong) {
+          const priceLL = candles[p2].low < candles[p1].low;
+          const priceHL = candles[p2].low > candles[p1].low;
+          if (priceLL && v2 > v1) type = 'regular';
+          else if (priceHL && v2 < v1) type = 'hidden';
+        } else {
+          const priceHH = candles[p2].high > candles[p1].high;
+          const priceLH = candles[p2].high < candles[p1].high;
+          if (priceHH && v2 < v1) type = 'regular';
+          else if (priceLH && v2 > v1) type = 'hidden';
+        }
+      }
+      const triggered = type !== null;
+      if (triggered) {
+        score += ind.weight;
+        triggeredCount++;
+      }
+      items.push({
+        key: ind.key,
+        name: ind.name,
+        group: ind.group,
+        weight: ind.weight,
+        triggered,
+        type,
+        latest: ind.arr[lastIdx]
+      });
+    }
+    return { score: Math.min(30, score), count: triggeredCount, items, p1, p2 };
+  };
+
+  return {
+    long: evalSide(true),
+    short: evalSide(false)
+  };
+}
+
+/* ===================== MODULE 3: CHoCH STRUCTURE (15 PTS) ===================== */
+
+function evaluateChochModule(k15m, mainCandles) {
+  const c = k15m && k15m.length >= 40 ? k15m : mainCandles;
+  const n = c.length;
+  const vols = c.map(x => x.volume);
+  const volMa20 = calcSMA(vols, 20);
+  const { pivotLows, pivotHighs } = findPivots(c, 3, 2);
+
+  // Bullish CHoCH: break above recent Lower High
+  const longRes = { score: 0, confirmed: false, volConfirmed: false, level: null, tag: '尚未突破結構' };
+  const recentHighPivots = pivotHighs.filter(i => i < n - 3 && i >= n - 45);
+  if (recentHighPivots.length >= 1) {
+    const lhIdx = recentHighPivots[recentHighPivots.length - 1];
+    const lhPrice = c[lhIdx].high;
+    longRes.level = lhPrice;
+    // Check if any of the last 5 bars broke & closed above lhPrice while prior bar was below
+    for (let i = Math.max(lhIdx + 1, n - 5); i < n; i++) {
+      if (c[i].close > lhPrice && c[i - 1].close <= lhPrice) {
+        longRes.confirmed = true;
+        longRes.score += 9;
+        if (volMa20[i] && c[i].volume > volMa20[i] * 1.5) {
+          longRes.volConfirmed = true;
+          longRes.score += 6;
+        }
+        break;
+      }
+    }
+    // Also check sustained breakout if current close is strictly above LH and crossed within 8 bars
+    if (!longRes.confirmed && c[n - 1].close > lhPrice) {
+      let wasBelow = false;
+      for (let i = Math.max(lhIdx + 1, n - 10); i < n - 1; i++) {
+        if (c[i].close < lhPrice) wasBelow = true;
+      }
+      if (wasBelow) {
+        longRes.confirmed = true;
+        longRes.score += 9;
+        const recentMaxVol = Math.max(...vols.slice(-4));
+        const curVolMa = volMa20[n - 1] || 1;
+        if (recentMaxVol > curVolMa * 1.5) {
+          longRes.volConfirmed = true;
+          longRes.score += 6;
+        }
+      }
+    }
+    if (longRes.confirmed) {
+      longRes.tag = longRes.volConfirmed ? 'CHoCH 帶量翻多' : 'CHoCH 突破翻多';
+    }
+  }
+
+  // Bearish CHoCH: break below recent Higher Low
+  const shortRes = { score: 0, confirmed: false, volConfirmed: false, level: null, tag: '尚未跌破結構' };
+  const recentLowPivots = pivotLows.filter(i => i < n - 3 && i >= n - 45);
+  if (recentLowPivots.length >= 1) {
+    const hlIdx = recentLowPivots[recentLowPivots.length - 1];
+    const hlPrice = c[hlIdx].low;
+    shortRes.level = hlPrice;
+    for (let i = Math.max(hlIdx + 1, n - 5); i < n; i++) {
+      if (c[i].close < hlPrice && c[i - 1].close >= hlPrice) {
+        shortRes.confirmed = true;
+        shortRes.score += 9;
+        if (volMa20[i] && c[i].volume > volMa20[i] * 1.5) {
+          shortRes.volConfirmed = true;
+          shortRes.score += 6;
+        }
+        break;
+      }
+    }
+    if (!shortRes.confirmed && c[n - 1].close < hlPrice) {
+      let wasAbove = false;
+      for (let i = Math.max(hlIdx + 1, n - 10); i < n - 1; i++) {
+        if (c[i].close > hlPrice) wasAbove = true;
+      }
+      if (wasAbove) {
+        shortRes.confirmed = true;
+        shortRes.score += 9;
+        const recentMaxVol = Math.max(...vols.slice(-4));
+        const curVolMa = volMa20[n - 1] || 1;
+        if (recentMaxVol > curVolMa * 1.5) {
+          shortRes.volConfirmed = true;
+          shortRes.score += 6;
+        }
+      }
+    }
+    if (shortRes.confirmed) {
+      shortRes.tag = shortRes.volConfirmed ? 'CHoCH 帶量翻空' : 'CHoCH 跌破翻空';
+    }
+  }
+
+  return { long: longRes, short: shortRes };
+}
+
+/* ===================== MODULE 4: CYPHER / FIBONACCI RISK CONTROL (15 PTS) ===================== */
+
+function evaluateRiskModule(candles, currentPrice, smcRes) {
+  const atrArr = calcATR(candles, 14);
+  const atr = atrArr[atrArr.length - 1] || (currentPrice * 0.01);
+  const slice60 = candles.slice(-60);
+  const slice18 = candles.slice(-18);
+
+  const macroHigh = Math.max(...slice60.map(c => c.high));
+  const macroLow  = Math.min(...slice60.map(c => c.low));
+  const localHigh = Math.max(...slice18.map(c => c.high));
+  const localLow  = Math.min(...slice18.map(c => c.low));
+
+  // LONG Plan
+  const longLowBase = smcRes.long.sweepExtreme ? Math.min(smcRes.long.sweepExtreme, localLow) : localLow;
+  const longStop = Math.max(longLowBase - 0.5 * atr, currentPrice * 0.85);
+  const longLeg = Math.max(localHigh - longLowBase, atr * 1.5);
+  const longEntryHigh = localHigh - 0.618 * longLeg;
+  const longEntryLow  = localHigh - 0.786 * longLeg;
+  const longEntryMid  = (longEntryHigh + longEntryLow) / 2;
+
+  const macroSpanL = Math.max(macroHigh - longLowBase, atr * 4);
+  let lT1 = Math.max(longLowBase + 0.382 * macroSpanL, currentPrice + 1.2 * atr);
+  let lT2 = Math.max(longLowBase + 0.618 * macroSpanL, lT1 + 1.2 * atr);
+  let lT3 = Math.max(macroHigh, lT2 + 1.5 * atr);
+
+  const longRisk = Math.max(currentPrice - longStop, currentPrice * 0.002);
+  const longRR = (lT2 - currentPrice) / longRisk;
+
+  const inLongZone = currentPrice >= longEntryLow * 0.995 && currentPrice <= longEntryHigh * 1.005;
+  const nearLongZone = Math.abs(currentPrice - longEntryMid) / currentPrice <= 0.012;
+  let longScore = 0;
+  if (inLongZone) longScore += 8;
+  else if (nearLongZone) longScore += 4;
+  if (longRR >= 2.5) longScore += 7;
+  else if (longRR >= 1.5) longScore += 4;
+
+  // SHORT Plan
+  const shortHighBase = smcRes.short.sweepExtreme ? Math.max(smcRes.short.sweepExtreme, localHigh) : localHigh;
+  const shortStop = Math.min(shortHighBase + 0.5 * atr, currentPrice * 1.15);
+  const shortLeg = Math.max(shortHighBase - localLow, atr * 1.5);
+  const shortEntryLow  = localLow + 0.618 * shortLeg;
+  const shortEntryHigh = localLow + 0.786 * shortLeg;
+  const shortEntryMid  = (shortEntryHigh + shortEntryLow) / 2;
+
+  const macroSpanS = Math.max(shortHighBase - macroLow, atr * 4);
+  let sT1 = Math.min(shortHighBase - 0.382 * macroSpanS, currentPrice - 1.2 * atr);
+  let sT2 = Math.min(shortHighBase - 0.618 * macroSpanS, sT1 - 1.2 * atr);
+  let sT3 = Math.min(macroLow, sT2 - 1.5 * atr);
+  sT1 = Math.max(sT1, currentPrice * 0.5);
+  sT2 = Math.max(sT2, sT1 * 0.7);
+  sT3 = Math.max(sT3, sT2 * 0.7);
+
+  const shortRisk = Math.max(shortStop - currentPrice, currentPrice * 0.002);
+  const shortRR = (currentPrice - sT2) / shortRisk;
+
+  const inShortZone = currentPrice >= shortEntryLow * 0.995 && currentPrice <= shortEntryHigh * 1.005;
+  const nearShortZone = Math.abs(currentPrice - shortEntryMid) / currentPrice <= 0.012;
+  let shortScore = 0;
+  if (inShortZone) shortScore += 8;
+  else if (nearShortZone) shortScore += 4;
+  if (shortRR >= 2.5) shortScore += 7;
+  else if (shortRR >= 1.5) shortScore += 4;
+
+  return {
+    atr,
+    long: {
+      score: Math.min(15, longScore),
+      entryLow: longEntryLow,
+      entryHigh: longEntryHigh,
+      stop: longStop,
+      t1: lT1, t2: lT2, t3: lT3,
+      rr: Math.max(0, longRR),
+      inZone: inLongZone
+    },
+    short: {
+      score: Math.min(15, shortScore),
+      entryLow: shortEntryLow,
+      entryHigh: shortEntryHigh,
+      stop: shortStop,
+      t1: sT1, t2: sT2, t3: sT3,
+      rr: Math.max(0, shortRR),
+      inZone: inShortZone
+    }
+  };
+}
+
+/* ===================== MODULE 5: 5-TIMEFRAME ENTRY LIGHTS (15 PTS) ===================== */
+
+function evaluateSingleTfLight(candles, tfLabel) {
+  if (!candles || candles.length < 15) {
+    return {
+      tf: tfLabel, state: 'NEUTRAL', label: '資料不足', scoreVal: 0,
+      ema9: null, ema21: null, rsi: null, macdHist: null, mfi: null, obvTrend: 0
+    };
+  }
+  const closes = candles.map(c => c.close);
+  const n = candles.length;
+  const pFast = Math.min(9, Math.max(3, Math.floor(n / 3)));
+  const pSlow = Math.min(21, Math.max(pFast + 2, Math.floor(n / 2)));
+  const ema9Arr = calcEMA(closes, pFast);
+  const ema21Arr = calcEMA(closes, pSlow);
+  const rsiArr = calcRSI(closes, Math.min(14, n - 2));
+  const macdObj = calcMACD(closes, Math.min(12, Math.floor(n / 3)), Math.min(26, Math.floor(n * 0.6)), 9);
+  const mfiArr = calcMFI(candles, Math.min(14, n - 2));
+  const obvArr = calcOBV(candles);
+
+  const last = n - 1;
+  const price = closes[last];
+  const ema9 = ema9Arr[last];
+  const ema21 = ema21Arr[last];
+  const rsi = rsiArr[last];
+  const hist = macdObj.hist[last];
+  const prevHist = last > 0 ? macdObj.hist[last - 1] : null;
+  const mfi = mfiArr[last];
+  const obvLookback = Math.max(0, last - 5);
+  const obvTrend = obvArr[last] - obvArr[obvLookback];
+
+  let bias = 0; // range roughly -5 to +5
+  if (ema9 !== null && ema21 !== null) {
+    if (price > ema9 && ema9 > ema21) bias += 1.5;
+    else if (price < ema9 && ema9 < ema21) bias -= 1.5;
+    else if (ema9 > ema21) bias += 0.6;
+    else if (ema9 < ema21) bias -= 0.6;
+  }
+  if (hist !== null) {
+    if (hist > 0 && (prevHist === null || hist >= prevHist)) bias += 1.2;
+    else if (hist > 0) bias += 0.5;
+    else if (hist < 0 && (prevHist === null || hist <= prevHist)) bias -= 1.2;
+    else if (hist < 0) bias -= 0.5;
+  }
+  if (rsi !== null) {
+    if (rsi >= 55 && rsi <= 76) bias += 0.9;
+    else if (rsi > 76) bias -= 0.3; // overbought caution
+    else if (rsi <= 45 && rsi >= 24) bias -= 0.9;
+    else if (rsi < 24) bias += 0.3; // oversold bounce potential
+  }
+  if (mfi !== null) {
+    if (mfi >= 53) bias += 0.7;
+    else if (mfi <= 47) bias -= 0.7;
+  }
+  if (obvTrend > 0) bias += 0.7;
+  else if (obvTrend < 0) bias -= 0.7;
+
+  let state = 'NEUTRAL', label = '盤整', scoreVal = 0;
+  if (bias >= 2.5) { state = 'STRONG_LONG'; label = '強多'; scoreVal = 2; }
+  else if (bias >= 1.0) { state = 'LONG'; label = '偏多'; scoreVal = 1; }
+  else if (bias <= -2.5) { state = 'STRONG_SHORT'; label = '強空'; scoreVal = -2; }
+  else if (bias <= -1.0) { state = 'SHORT'; label = '偏空'; scoreVal = -1; }
+
+  return {
+    tf: tfLabel, state, label, scoreVal, bias,
+    ema9, ema21, rsi, macdHist: hist, mfi, obvTrend
+  };
+}
+
+function evaluateFiveTfLights(tfMap) {
+  const tfs = ['1h', '4h', '1d', '3d', '7d'];
+  const lights = {};
+  let longScore = 0, shortScore = 0;
+  let longCount = 0, shortCount = 0;
+
+  for (const tf of tfs) {
+    const res = evaluateSingleTfLight(tfMap[tf], tf);
+    lights[tf] = res;
+    if (res.state === 'STRONG_LONG') { longScore += 3; longCount++; }
+    else if (res.state === 'LONG') { longScore += 2; longCount++; }
+    else if (res.state === 'STRONG_SHORT') { shortScore += 3; shortCount++; }
+    else if (res.state === 'SHORT') { shortScore += 2; shortCount++; }
+  }
+
+  return {
+    lights,
+    long: { score: Math.min(15, longScore), count: longCount },
+    short: { score: Math.min(15, shortScore), count: shortCount }
+  };
+}
+
+/* ===================== MASTER SYMBOL ANALYZER ===================== */
+
+function analyzeSymbol(ticker, rawKlines) {
+  const tfMap = buildAllTimeframes(rawKlines);
+  const mainCandles = tfMap[STATE.mainTf];
+  const latestPrice = mainCandles.length ? mainCandles[mainCandles.length - 1].close : ticker.price;
+
+  const smcLevels = computeSmcLevels(tfMap['1h']);
+  const smcMod = evaluateSmcModule(mainCandles, smcLevels);
+  const divMod = evaluateDivergenceModule(mainCandles);
+  const chochMod = evaluateChochModule(tfMap['15m'], mainCandles);
+  const riskMod = evaluateRiskModule(mainCandles, latestPrice, smcMod);
+  const lightMod = evaluateFiveTfLights(tfMap);
+
+  const buildSide = (side) => {
+    const smc = smcMod[side].score;
+    const div = divMod[side].score;
+    const choch = chochMod[side].score;
+    const risk = riskMod[side].score;
+    const light = lightMod[side].score;
+    const total = Math.min(100, Math.round(smc + div + choch + risk + light));
+    const grade = total >= 85 ? 'S' : total >= 70 ? 'A' : total >= 50 ? 'B' : 'C';
+    return {
+      side,
+      total,
+      grade,
+      breakdown: { smc, div, choch, risk, light },
+      smc: smcMod[side],
+      div: divMod[side],
+      choch: chochMod[side],
+      risk: riskMod[side],
+      lightCount: lightMod[side].count
+    };
+  };
+
+  const longEval = buildSide('long');
+  const shortEval = buildSide('short');
+  const bestSide = longEval.total >= shortEval.total ? 'long' : 'short';
+
+  return {
+    symbol: ticker.symbol,
+    price: latestPrice,
+    changePct: ticker.changePct,
+    quoteVolume: ticker.quoteVolume,
+    smcLevels,
+    lights: lightMod.lights,
+    long: longEval,
+    short: shortEval,
+    bestSide,
+    tfMap,
+    updatedAt: Date.now()
+  };
+}
+
+/* ===================== CONCURRENT SCANNER ENGINE ===================== */
+
+async function startFullScan() {
+  STATE.scanId++;
+  const myScanId = STATE.scanId;
+  STATE.isScanning = true;
+  STATE.isPaused = false;
+  STATE.results.clear();
+  STATE.completedCount = 0;
+  STATE.failedCount = 0;
+  STATE.renderLimit = 80;
+
+  hideErrorBanner();
+  updatePauseBtn();
+  setScanStatus('正在向幣安請求 24h 成交額前 500 大交易對...');
+  renderDashboard();
+
+  try {
+    const tickers = await fetchTop500Tickers();
+    if (myScanId !== STATE.scanId) return;
+
+    STATE.allRankedTickers = tickers;
+    const targetList = tickers.slice(0, Math.min(STATE.topN, tickers.length));
+    STATE.queue = [...targetList];
+    STATE.totalToScan = targetList.length;
+
+    updateProgressUI();
+    setScanStatus(`已取得幣安前 ${tickers.length} 大交易對，正在並發掃描前 ${targetList.length} 大真實 K 線...`);
+
+    const workerCount = Math.min(STATE.concurrency, targetList.length);
+    const workers = [];
+    for (let w = 0; w < workerCount; w++) {
+      workers.push(runWorker(myScanId));
+    }
+    await Promise.all(workers);
+
+    if (myScanId !== STATE.scanId) return;
+    STATE.isScanning = false;
+    updatePauseBtn();
+    document.getElementById('lastUpdateTime').textContent = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+    setScanStatus(`掃描完成！共完成 ${STATE.results.size} 檔幣安真實幣種評分${STATE.failedCount ? `（失敗 ${STATE.failedCount}）` : ''}`);
+    renderDashboard();
+  } catch (err) {
+    if (myScanId !== STATE.scanId) return;
+    STATE.isScanning = false;
+    updatePauseBtn();
+    setScanStatus('幣安 API 連線失敗');
+    showErrorBanner('無法連線至幣安官方 API', `${err.message || err}。請確認網路環境是否可存取幣安，或切換「現貨市場」，或在右上角「⚙️ API 設定」配置自訂代理。`);
+  }
+}
+
+async function runWorker(myScanId) {
+  let renderThrottle = 0;
+  while (myScanId === STATE.scanId) {
+    if (STATE.isPaused) {
+      await sleep(250);
+      continue;
+    }
+    const ticker = STATE.queue.shift();
+    if (!ticker) break;
+
+    try {
+      const klines = await fetchSymbolKlines(ticker.symbol);
+      if (myScanId !== STATE.scanId) return;
+      const analysis = analyzeSymbol(ticker, klines);
+      STATE.results.set(ticker.symbol, analysis);
+    } catch (_) {
+      STATE.failedCount++;
+    } finally {
+      STATE.completedCount++;
+      updateProgressUI();
+      const now = Date.now();
+      if (now - renderThrottle > 380 || STATE.queue.length === 0) {
+        renderThrottle = now;
+        renderDashboard();
+      }
+      // Gentle pacing to respect Binance public rate limits
+      await sleep(95);
+    }
+  }
+}
+
+async function prioritizeSearchSymbol() {
+  const raw = document.getElementById('searchInput').value.trim().toUpperCase();
+  if (!raw) return;
+  const querySym = raw.endsWith('USDT') ? raw : raw + 'USDT';
+
+  // Find in top 500 tickers
+  const match = STATE.allRankedTickers.find(t => t.symbol === querySym || t.symbol.startsWith(raw));
+  if (!match) {
+    showToast(`前 500 大 USDT 幣種中找不到「${raw}」`, true);
+    return;
+  }
+
+  // If already scanned, just open or refresh it
+  showToast(`正在優先抓取 ${match.symbol} 真實幣安 K 線...`);
+  try {
+    const klines = await fetchSymbolKlines(match.symbol);
+    const analysis = analyzeSymbol(match, klines);
+    STATE.results.set(match.symbol, analysis);
+    // Remove from pending queue if present
+    STATE.queue = STATE.queue.filter(t => t.symbol !== match.symbol);
+    renderDashboard();
+    showToast(`✅ ${match.symbol} 即時評分更新完成！`);
+  } catch (err) {
+    showToast(`抓取 ${match.symbol} 失敗: ${err.message}`, true);
+  }
+}
+
+/* ===================== UI RENDERING & HELPERS ===================== */
+
+function getActiveEval(item) {
+  if (STATE.radarMode === 'long') return item.long;
+  if (STATE.radarMode === 'short') return item.short;
+  return item[item.bestSide];
+}
+
+function getFilteredSortedResults() {
+  const search = document.getElementById('searchInput').value.trim().toUpperCase();
+  const gradeFilter = document.getElementById('filterGrade').value;
+  const sortBy = document.getElementById('sortBy').value;
+
+  let arr = Array.from(STATE.results.values());
+
+  if (search) {
+    arr = arr.filter(item => item.symbol.includes(search));
+  }
+
+  if (gradeFilter !== 'ALL') {
+    arr = arr.filter(item => {
+      const ev = getActiveEval(item);
+      if (gradeFilter === 'S') return ev.total >= 85;
+      if (gradeFilter === 'A') return ev.total >= 70;
+      if (gradeFilter === 'B') return ev.total >= 50;
+      return true;
+    });
+  }
+
+  arr.sort((a, b) => {
+    const ea = getActiveEval(a), eb = getActiveEval(b);
+    if (sortBy === 'score') {
+      if (eb.total !== ea.total) return eb.total - ea.total;
+      if (eb.lightCount !== ea.lightCount) return eb.lightCount - ea.lightCount;
+      return b.quoteVolume - a.quoteVolume;
+    }
+    if (sortBy === 'lights') {
+      if (eb.lightCount !== ea.lightCount) return eb.lightCount - ea.lightCount;
+      return eb.total - ea.total;
+    }
+    if (sortBy === 'div') {
+      if (eb.div.count !== ea.div.count) return eb.div.count - ea.div.count;
+      return eb.total - ea.total;
+    }
+    if (sortBy === 'volume') return b.quoteVolume - a.quoteVolume;
+    if (sortBy === 'change') return Math.abs(b.changePct) - Math.abs(a.changePct);
+    return eb.total - ea.total;
+  });
+
+  return arr;
+}
+
+function renderDashboard() {
+  const all = Array.from(STATE.results.values());
+  let cntS = 0, cntA = 0, cntB = 0, cntFull = 0;
+  for (const item of all) {
+    const ev = getActiveEval(item);
+    if (ev.total >= 85) cntS++;
+    else if (ev.total >= 70) cntA++;
+    else if (ev.total >= 50) cntB++;
+    if (ev.lightCount === 5) cntFull++;
+  }
+  document.getElementById('kpiS').textContent = cntS;
+  document.getElementById('kpiA').textContent = cntA;
+  document.getElementById('kpiB').textContent = cntB;
+  document.getElementById('kpiFullLight').textContent = cntFull;
+
+  const list = getFilteredSortedResults();
+  const visible = list.slice(0, STATE.renderLimit);
+  document.getElementById('visibleCountText').textContent = `顯示 ${visible.length} / ${list.length} 檔（已掃描 ${all.length}）`;
+
+  const loadMoreWrap = document.getElementById('loadMoreWrap');
+  if (list.length > STATE.renderLimit) loadMoreWrap.classList.remove('hidden');
+  else loadMoreWrap.classList.add('hidden');
+
+  if (STATE.viewMode === 'table') {
+    document.getElementById('tableViewContainer').classList.remove('hidden');
+    document.getElementById('cardViewContainer').classList.add('hidden');
+    renderTableView(visible);
+  } else {
+    document.getElementById('tableViewContainer').classList.add('hidden');
+    document.getElementById('cardViewContainer').classList.remove('hidden');
+    renderCardView(visible);
+  }
+
+  // Refresh drawer if open
+  if (STATE.drawerSymbol && STATE.results.has(STATE.drawerSymbol)) {
+    renderDrawerContent();
+  }
+}
+
+function renderLightPillsHTML(item) {
+  const tfs = ['1h', '4h', '1d', '3d', '7d'];
+  return `<div class="flex items-center gap-1">` + tfs.map(tf => {
+    const l = item.lights[tf];
+    const cls = l.state === 'STRONG_LONG' ? 'led-strong-long'
+              : l.state === 'LONG' ? 'led-long'
+              : l.state === 'STRONG_SHORT' ? 'led-strong-short'
+              : l.state === 'SHORT' ? 'led-short'
+              : 'led-neutral';
+    const shortTag = l.state.includes('LONG') ? '多' : l.state.includes('SHORT') ? '空' : '盤';
+    return `<span class="px-1.5 py-0.5 rounded text-[10px] font-mono-num font-bold cursor-help select-none transition hover:scale-105 ${cls}"
+      onmouseenter="showLightTooltip(event, '${item.symbol}', '${tf}')"
+      onmouseleave="hideTooltip()">
+      ${tf}<span class="ml-0.5 opacity-90">${shortTag}</span>
+    </span>`;
+  }).join('') + `</div>`;
+}
+
+function gradeBadgeHTML(ev) {
+  const isLong = ev.side === 'long';
+  if (ev.grade === 'S') {
+    return `<span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold ${isLong ? 'bg-emerald-500 text-slate-950' : 'bg-rose-500 text-white'}">S級 極強</span>`;
+  }
+  if (ev.grade === 'A') {
+    return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">A級 進場</span>`;
+  }
+  if (ev.grade === 'B') {
+    return `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">B級 觀察</span>`;
+  }
+  return `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700">C級 觀望</span>`;
+}
+
+function renderTableView(list) {
+  const tbody = document.getElementById('tableBody');
+  if (!list.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="py-14 text-center text-slate-400">
+      ${STATE.isScanning ? '正在即時抓取幣安 K 線並計算評分，請稍候...' : '目前篩選條件下尚無符合幣種，可放寬等級篩選或搜尋其他幣種。'}
+    </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map((item, idx) => {
+    const ev = getActiveEval(item);
+    const isLong = ev.side === 'long';
+    const sideText = isLong ? '做多' : '做空';
+    const sideCls = isLong
+      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+      : 'bg-rose-500/15 text-rose-300 border-rose-500/40';
+    const barColor = ev.total >= 85 ? (isLong ? 'bg-emerald-400' : 'bg-rose-500')
+                   : ev.total >= 70 ? 'bg-cyan-400'
+                   : ev.total >= 50 ? 'bg-amber-400' : 'bg-slate-600';
+    const rowHighlight = ev.grade === 'S'
+      ? (isLong ? 'bg-emerald-950/25 hover:bg-emerald-950/40' : 'bg-rose-950/25 hover:bg-rose-950/40')
+      : 'hover:bg-terminal-hover/70';
+
+    const smcTags = ev.smc.tags.length ? ev.smc.tags.join(' · ') : '無流動性刺破';
+    const chochCls = ev.choch.confirmed
+      ? (isLong ? 'text-emerald-300 font-semibold' : 'text-rose-300 font-semibold')
+      : 'text-slate-500';
+    const chgCls = item.changePct >= 0 ? 'text-emerald-400' : 'text-rose-400';
+
+    return `<tr class="${rowHighlight} transition cursor-pointer" onclick="openDetailDrawer('${item.symbol}', '${ev.side}')">
+      <td class="py-3 px-3 text-center font-mono-num text-slate-500 font-bold">${idx + 1}</td>
+      <td class="py-3 px-3">
+        <div class="flex items-center gap-2">
+          <span class="font-extrabold text-white font-mono-num text-sm">${item.symbol.replace('USDT','')}</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded border font-bold ${sideCls}">${sideText}</span>
+        </div>
+        <div class="flex items-center gap-2 mt-0.5 font-mono-num text-[11px]">
+          <span class="text-slate-200 font-semibold">$${fmtPrice(item.price)}</span>
+          <span class="${chgCls}">${item.changePct >= 0 ? '+' : ''}${item.changePct.toFixed(2)}%</span>
+          <span class="text-slate-500">額 ${fmtVol(item.quoteVolume)}</span>
+        </div>
+      </td>
+      <td class="py-3 px-3">
+        <div class="flex items-center justify-between mb-1">
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-lg font-extrabold font-mono-num ${ev.total >= 85 ? 'text-white' : ev.total >= 70 ? 'text-cyan-300' : 'text-slate-200'}">${ev.total}</span>
+            <span class="text-[10px] text-slate-500">/100</span>
+          </div>
+          ${gradeBadgeHTML(ev)}
+        </div>
+        <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+          <div class="h-full ${barColor} rounded-full" style="width:${ev.total}%"></div>
+        </div>
+        <div class="flex justify-between text-[10px] font-mono-num text-slate-500 mt-1">
+          <span>多:${item.long.total}</span>
+          <span>空:${item.short.total}</span>
+          <span>燈:${ev.lightCount}/5</span>
+        </div>
+      </td>
+      <td class="py-3 px-3" onclick="event.stopPropagation()">
+        ${renderLightPillsHTML(item)}
+        <div class="text-[10px] text-slate-400 mt-1 font-mono-num">
+          ${ev.lightCount === 5 ? '<span class="text-amber-300 font-bold">⚡ 5/5 全週期共振</span>' : `同向共振 ${ev.lightCount}/5 週期`}
+        </div>
+      </td>
+      <td class="py-3 px-3" onclick="event.stopPropagation()">
+        <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-900 border ${ev.div.count >= 5 ? 'border-cyan-500/60 text-cyan-300' : 'border-slate-700 text-slate-300'} font-mono-num font-bold cursor-help"
+          onmouseenter="showDivTooltip(event, '${item.symbol}', '${ev.side}')"
+          onmouseleave="hideTooltip()">
+          <span>${ev.div.count}/8 背離</span>
+          <span class="text-[10px] opacity-75">(+${ev.breakdown.div}分)</span>
+        </div>
+        <div class="text-[10px] text-slate-500 mt-1 truncate max-w-[130px]">
+          ${ev.div.items.filter(x => x.triggered).map(x => x.key).join(', ') || '暫無背離'}
+        </div>
+      </td>
+      <td class="py-3 px-3">
+        <div class="text-[11px] ${ev.smc.tags.length ? 'text-amber-300 font-semibold' : 'text-slate-500'} truncate max-w-[185px]">${smcTags}</div>
+        <div class="text-[11px] mt-0.5 ${chochCls}">${ev.choch.tag}</div>
+      </td>
+      <td class="py-3 px-3 font-mono-num text-[11px]">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          <span><span class="text-slate-500">Entry:</span> <span class="text-cyan-300">${fmtPrice(ev.risk.entryLow)}~${fmtPrice(ev.risk.entryHigh)}</span></span>
+          <span><span class="text-slate-500">Stop:</span> <span class="text-rose-400">${fmtPrice(ev.risk.stop)}</span></span>
+        </div>
+        <div class="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-0.5 text-[10px]">
+          <span class="text-emerald-400">T1 ${fmtPrice(ev.risk.t1)}</span>
+          <span class="text-emerald-300 font-semibold">T2 ${fmtPrice(ev.risk.t2)}</span>
+          <span class="text-slate-400">T3 ${fmtPrice(ev.risk.t3)}</span>
+          <span class="px-1.5 rounded bg-slate-800 ${ev.risk.rr >= 2.5 ? 'text-amber-300 font-bold' : 'text-slate-300'}">R:R 1:${ev.risk.rr.toFixed(1)}</span>
+        </div>
+      </td>
+      <td class="py-3 px-3 text-right">
+        <button class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-cyan-500/15 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 transition">
+          圖表 ↗
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function renderCardView(list) {
+  const wrap = document.getElementById('cardViewContainer');
+  if (!list.length) {
+    wrap.innerHTML = `<div class="col-span-full py-16 text-center text-slate-400 bg-terminal-panel border border-terminal-border rounded-xl">
+      ${STATE.isScanning ? '正在即時掃描幣安真實 K 線數據...' : '目前篩選條件下無符合幣種'}
+    </div>`;
+    return;
+  }
+
+  wrap.innerHTML = list.map(item => {
+    const ev = getActiveEval(item);
+    const isLong = ev.side === 'long';
+    const sAnim = ev.grade === 'S' ? (isLong ? 's-tier-long' : 's-tier-short') : 'border-terminal-border hover:border-cyan-500/50';
+    const barColor = isLong ? 'from-emerald-500 to-cyan-400' : 'from-rose-500 to-amber-400';
+
+    return `<div class="bg-terminal-card border ${sAnim} rounded-xl p-4 flex flex-col justify-between gap-3 transition cursor-pointer" onclick="openDetailDrawer('${item.symbol}', '${ev.side}')">
+      <!-- Top Row -->
+      <div class="flex items-start justify-between gap-2">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-base font-extrabold text-white font-mono-num">${item.symbol}</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${isLong ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' : 'bg-rose-500/15 text-rose-300 border-rose-500/40'}">
+              ${isLong ? '📈 起漲多頭' : '📉 起跌空頭'}
+            </span>
+            ${gradeBadgeHTML(ev)}
+          </div>
+          <div class="flex items-center gap-2.5 mt-1 text-xs font-mono-num">
+            <span class="text-white font-bold">$${fmtPrice(item.price)}</span>
+            <span class="${item.changePct >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${item.changePct >= 0 ? '+' : ''}${item.changePct.toFixed(2)}%</span>
+            <span class="text-slate-500">24h額 ${fmtVol(item.quoteVolume)}</span>
+          </div>
+        </div>
+        <div class="text-right">
+          <div class="text-2xl font-extrabold font-mono-num leading-none ${isLong ? 'text-emerald-300' : 'text-rose-300'}">${ev.total}</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">進場評分</div>
+        </div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div>
+        <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div class="h-full bg-gradient-to-r ${barColor}" style="width:${ev.total}%"></div>
+        </div>
+      </div>
+
+      <!-- 5-TF Lights -->
+      <div onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
+          <span>五週期多空進場燈號</span>
+          <span class="font-mono-num ${ev.lightCount === 5 ? 'text-amber-300 font-bold' : ''}">${ev.lightCount}/5 共振</span>
+        </div>
+        ${renderLightPillsHTML(item)}
+      </div>
+
+      <!-- Divergence & SMC -->
+      <div class="grid grid-cols-2 gap-2 text-[11px]" onclick="event.stopPropagation()">
+        <div class="bg-[#09101f] border border-terminal-border rounded-lg p-2 cursor-help"
+          onmouseenter="showDivTooltip(event, '${item.symbol}', '${ev.side}')"
+          onmouseleave="hideTooltip()">
+          <div class="text-slate-400">8大指標背離</div>
+          <div class="font-mono-num font-bold text-cyan-300 mt-0.5">${ev.div.count}/8 共振 (+${ev.breakdown.div}分)</div>
+        </div>
+        <div class="bg-[#09101f] border border-terminal-border rounded-lg p-2">
+          <div class="text-slate-400">SMC / CHoCH</div>
+          <div class="font-semibold text-amber-300 mt-0.5 truncate">${ev.smc.tags[0] || ev.choch.tag}</div>
+        </div>
+      </div>
+
+      <!-- Entry / Stop / Targets -->
+      <div class="bg-[#080e1a] border border-terminal-border/80 rounded-lg p-2.5 text-[11px] font-mono-num space-y-1">
+        <div class="flex justify-between">
+          <span class="text-slate-400">Entry 區間</span>
+          <span class="text-cyan-300 font-semibold">${fmtPrice(ev.risk.entryLow)} ~ ${fmtPrice(ev.risk.entryHigh)}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">T.Stop 止損</span>
+          <span class="text-rose-400 font-semibold">${fmtPrice(ev.risk.stop)}</span>
+        </div>
+        <div class="flex justify-between pt-1 border-t border-slate-800/80 text-[10px]">
+          <span class="text-emerald-400">T1: ${fmtPrice(ev.risk.t1)}</span>
+          <span class="text-emerald-300 font-bold">T2: ${fmtPrice(ev.risk.t2)}</span>
+          <span class="text-amber-300 font-bold">R:R 1:${ev.risk.rr.toFixed(1)}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ===================== FLOATING TOOLTIPS ===================== */
+
+function positionTooltip(e, html) {
+  const tip = document.getElementById('globalTooltip');
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  const pad = 14;
+  let x = e.clientX + pad;
+  let y = e.clientY + pad;
+  const rect = tip.getBoundingClientRect();
+  if (x + rect.width > window.innerWidth - 10) x = e.clientX - rect.width - pad;
+  if (y + rect.height > window.innerHeight - 10) y = e.clientY - rect.height - pad;
+  tip.style.left = Math.max(8, x) + 'px';
+  tip.style.top = Math.max(8, y) + 'px';
+}
+
+function hideTooltip() {
+  document.getElementById('globalTooltip').style.display = 'none';
+}
+
+function showLightTooltip(e, symbol, tf) {
+  const item = STATE.results.get(symbol);
+  if (!item) return;
+  const l = item.lights[tf];
+  const color = l.state.includes('LONG') ? 'text-emerald-300' : l.state.includes('SHORT') ? 'text-rose-300' : 'text-slate-300';
+  const html = `
+    <div class="font-bold text-white mb-1.5 flex items-center justify-between gap-4">
+      <span class="font-mono-num">${symbol} · ${tf} 進場燈號</span>
+      <span class="${color}">${l.label}</span>
+    </div>
+    <div class="space-y-1 font-mono-num text-[11px] text-slate-300">
+      <div class="flex justify-between gap-4"><span class="text-slate-400">EMA 9 / 21:</span><span>${l.ema9 ? fmtPrice(l.ema9) : '--'} / ${l.ema21 ? fmtPrice(l.ema21) : '--'}</span></div>
+      <div class="flex justify-between gap-4"><span class="text-slate-400">RSI(14):</span><span>${l.rsi !== null ? l.rsi.toFixed(1) : '--'}</span></div>
+      <div class="flex justify-between gap-4"><span class="text-slate-400">MACD 柱:</span><span class="${l.macdHist >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${l.macdHist !== null ? l.macdHist.toPrecision(3) : '--'}</span></div>
+      <div class="flex justify-between gap-4"><span class="text-slate-400">MFI(14):</span><span>${l.mfi !== null ? l.mfi.toFixed(1) : '--'}</span></div>
+      <div class="flex justify-between gap-4"><span class="text-slate-400">OBV 資金流:</span><span class="${l.obvTrend >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${l.obvTrend >= 0 ? '淨流入 ▲' : '淨流出 ▼'}</span></div>
+    </div>`;
+  positionTooltip(e, html);
+}
+
+function showDivTooltip(e, symbol, side) {
+  const item = STATE.results.get(symbol);
+  if (!item) return;
+  const div = item[side].div;
+  const rows = div.items.map(x => `
+    <div class="flex items-center justify-between gap-4">
+      <span class="${x.triggered ? 'text-white font-semibold' : 'text-slate-500'}">${x.key} <span class="text-[10px] opacity-70">(${x.group})</span></span>
+      <span class="${x.triggered ? (side === 'long' ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold') : 'text-slate-600'}">
+        ${x.triggered ? (x.type === 'regular' ? '常規背離 ✓' : '隱藏背離 ✓') + ` +${x.weight}` : '未觸發'}
+      </span>
+    </div>`).join('');
+  const html = `
+    <div class="font-bold text-white mb-1.5 flex items-center justify-between gap-4">
+      <span>${symbol} ${side === 'long' ? '底背離' : '頂背離'}明細</span>
+      <span class="text-cyan-300 font-mono-num">${div.count}/8</span>
+    </div>
+    <div class="space-y-1 font-mono-num text-[11px]">${rows}</div>`;
+  positionTooltip(e, html);
+}
+
+/* ===================== DETAIL DRAWER & INTERACTIVE CANVAS CHART ===================== */
+
+function openDetailDrawer(symbol, side) {
+  if (!STATE.results.has(symbol)) return;
+  STATE.drawerSymbol = symbol;
+  STATE.drawerSide = side || STATE.results.get(symbol).bestSide;
+  STATE.drawerChartTf = STATE.mainTf;
+  document.getElementById('detailDrawerBackdrop').classList.remove('hidden');
+  document.getElementById('detailDrawer').classList.remove('translate-x-full');
+  renderDrawerContent();
+}
+
+function closeDetailDrawer() {
+  document.getElementById('detailDrawerBackdrop').classList.add('hidden');
+  document.getElementById('detailDrawer').classList.add('translate-x-full');
+  STATE.drawerSymbol = null;
+}
+
+function switchDrawerSide(side) {
+  STATE.drawerSide = side;
+  renderDrawerContent();
+}
+
+function switchChartTf(tf) {
+  STATE.drawerChartTf = tf;
+  document.querySelectorAll('.chart-tf-btn').forEach(btn => {
+    const active = btn.dataset.tf === tf;
+    btn.className = active
+      ? 'chart-tf-btn px-2 py-1 rounded text-[11px] font-mono-num font-semibold bg-cyan-600 text-white'
+      : 'chart-tf-btn px-2 py-1 rounded text-[11px] font-mono-num font-semibold bg-slate-800 text-slate-300 hover:bg-slate-700';
+  });
+  drawDrawerChart();
+}
+
+function renderDrawerContent() {
+  const item = STATE.results.get(STATE.drawerSymbol);
+  if (!item) return;
+  const ev = item[STATE.drawerSide];
+  const isLong = STATE.drawerSide === 'long';
+
+  document.getElementById('drawerSymbol').textContent = item.symbol;
+  document.getElementById('drawerPrice').textContent = '$' + fmtPrice(item.price);
+  const chgEl = document.getElementById('drawerChange');
+  chgEl.textContent = (item.changePct >= 0 ? '+' : '') + item.changePct.toFixed(2) + '%';
+  chgEl.className = item.changePct >= 0 ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold';
+  document.getElementById('drawerVol').textContent = fmtVol(item.quoteVolume);
+
+  const dirBadge = document.getElementById('drawerDirectionBadge');
+  dirBadge.textContent = isLong ? '📈 起漲多頭策略' : '📉 起跌空頭策略';
+  dirBadge.className = `px-2 py-0.5 rounded text-xs font-bold border ${isLong ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50' : 'bg-rose-500/20 text-rose-300 border-rose-500/50'}`;
+  document.getElementById('drawerGradeBadge').innerHTML = gradeBadgeHTML(ev);
+
+  const bnUrl = STATE.market === 'futures'
+    ? `https://www.binance.com/zh-TC/futures/${item.symbol}`
+    : `https://www.binance.com/zh-TC/trade/${item.symbol.replace('USDT', '_USDT')}`;
+  document.getElementById('drawerBinanceLink').href = bnUrl;
+
+  // Dual side switcher buttons
+  document.getElementById('drawerLongTotal').textContent = item.long.total;
+  document.getElementById('drawerShortTotal').textContent = item.short.total;
+  document.getElementById('drawerSideLongBtn').className = isLong
+    ? 'px-2 py-0.5 rounded border bg-emerald-500/25 border-emerald-400 text-emerald-200 font-bold'
+    : 'px-2 py-0.5 rounded border bg-slate-900 border-slate-700 text-slate-400 hover:text-white';
+  document.getElementById('drawerSideShortBtn').className = !isLong
+    ? 'px-2 py-0.5 rounded border bg-rose-500/25 border-rose-400 text-rose-200 font-bold'
+    : 'px-2 py-0.5 rounded border bg-slate-900 border-slate-700 text-slate-400 hover:text-white';
+
+  // 5-Module Breakdown
+  const mods = [
+    { label: '模組1 · SMC 流動性獵取', val: ev.breakdown.smc, max: 25, color: 'bg-amber-400' },
+    { label: '模組2 · 8大指標背離共振', val: ev.breakdown.div, max: 30, color: 'bg-cyan-400' },
+    { label: '模組3 · CHoCH 結構確認', val: ev.breakdown.choch, max: 15, color: 'bg-indigo-400' },
+    { label: '模組4 · 斐波那契風控點位', val: ev.breakdown.risk, max: 15, color: 'bg-emerald-400' },
+    { label: '模組5 · 5週期進場燈號共振', val: ev.breakdown.light, max: 15, color: 'bg-fuchsia-400' }
+  ];
+  document.getElementById('drawerBreakdownBars').innerHTML = mods.map(m => `
+    <div>
+      <div class="flex justify-between text-[11px] mb-1">
+        <span class="text-slate-300">${m.label}</span>
+        <span class="font-mono-num font-bold text-white">${m.val} / ${m.max}</span>
+      </div>
+      <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+        <div class="h-full ${m.color}" style="width:${(m.val / m.max) * 100}%"></div>
+      </div>
+    </div>`).join('');
+
+  // Trade Levels
+  document.getElementById('drawerLevelsGrid').innerHTML = `
+    <div class="p-2 rounded-lg bg-[#070d19] border border-cyan-500/30 col-span-2">
+      <div class="text-[10px] text-slate-400">Entry 最佳進場區間 (Fib 0.618~0.786)</div>
+      <div class="text-sm font-bold text-cyan-300 mt-0.5">$${fmtPrice(ev.risk.entryLow)} ~ $${fmtPrice(ev.risk.entryHigh)}</div>
+    </div>
+    <div class="p-2 rounded-lg bg-[#070d19] border border-rose-500/30">
+      <div class="text-[10px] text-slate-400">T.Stop 移動止損</div>
+      <div class="text-xs font-bold text-rose-400 mt-0.5">$${fmtPrice(ev.risk.stop)}</div>
+    </div>
+    <div class="p-2 rounded-lg bg-[#070d19] border border-amber-500/30">
+      <div class="text-[10px] text-slate-400">預估盈虧比 (至 T2)</div>
+      <div class="text-xs font-bold text-amber-300 mt-0.5">1 : ${ev.risk.rr.toFixed(2)}</div>
+    </div>
+    <div class="p-2 rounded-lg bg-[#070d19] border border-emerald-500/20">
+      <div class="text-[10px] text-slate-400">Target 1 (0.382)</div>
+      <div class="text-xs font-bold text-emerald-400 mt-0.5">$${fmtPrice(ev.risk.t1)}</div>
+    </div>
+    <div class="p-2 rounded-lg bg-[#070d19] border border-emerald-500/30">
+      <div class="text-[10px] text-slate-400">Target 2 (0.618) / T3</div>
+      <div class="text-xs font-bold text-emerald-300 mt-0.5">$${fmtPrice(ev.risk.t2)} / $${fmtPrice(ev.risk.t3)}</div>
+    </div>`;
+
+  const sl = item.smcLevels || {};
+  document.getElementById('drawerSmcLevels').innerHTML = `
+    <div>PDH: <span class="text-slate-200">${sl.pdh ? fmtPrice(sl.pdh) : '--'}</span></div>
+    <div>PDL: <span class="text-slate-200">${sl.pdl ? fmtPrice(sl.pdl) : '--'}</span></div>
+    <div>ASIA H/L: <span class="text-slate-200">${sl.asiaHigh ? fmtPrice(sl.asiaHigh) : '--'} / ${sl.asiaLow ? fmtPrice(sl.asiaLow) : '--'}</span></div>
+    <div>LNDN H/L: <span class="text-slate-200">${sl.lndnHigh ? fmtPrice(sl.lndnHigh) : '--'} / ${sl.lndnLow ? fmtPrice(sl.lndnLow) : '--'}</span></div>
+    <div>D Open: <span class="text-slate-200">${sl.dOpen ? fmtPrice(sl.dOpen) : '--'}</span></div>
+    <div>W Open: <span class="text-slate-200">${sl.wOpen ? fmtPrice(sl.wOpen) : '--'}</span></div>`;
+
+  // 5-TF Matrix Table
+  const tfs = ['1h', '4h', '1d', '3d', '7d'];
+  document.getElementById('drawerTfTableBody').innerHTML = tfs.map(tf => {
+    const l = item.lights[tf];
+    const cls = l.state === 'STRONG_LONG' ? 'led-strong-long'
+              : l.state === 'LONG' ? 'led-long'
+              : l.state === 'STRONG_SHORT' ? 'led-strong-short'
+              : l.state === 'SHORT' ? 'led-short' : 'led-neutral';
+    return `<tr>
+      <td class="py-2 font-bold text-white">${tf}</td>
+      <td class="py-2"><span class="px-2 py-0.5 rounded text-[11px] font-bold ${cls}">${l.label}</span></td>
+      <td class="py-2 text-slate-300">${l.ema9 && l.ema21 ? (l.ema9 > l.ema21 ? '<span class="text-emerald-400">多頭排列</span>' : '<span class="text-rose-400">空頭排列</span>') : '--'}</td>
+      <td class="py-2 text-right ${l.rsi > 70 ? 'text-rose-400' : l.rsi < 30 ? 'text-emerald-400' : 'text-slate-200'}">${l.rsi !== null ? l.rsi.toFixed(1) : '--'}</td>
+      <td class="py-2 text-right ${l.macdHist >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${l.macdHist !== null ? l.macdHist.toPrecision(3) : '--'}</td>
+      <td class="py-2 text-right text-slate-200">${l.mfi !== null ? l.mfi.toFixed(1) : '--'}</td>
+      <td class="py-2 text-right ${l.obvTrend >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${l.obvTrend >= 0 ? '流入 ▲' : '流出 ▼'}</td>
+    </tr>`;
+  }).join('');
+
+  // 8-Indicator Divergence Cards
+  document.getElementById('drawerDivSummary').textContent = `${ev.div.count} / 8 共振 (+${ev.breakdown.div}分)`;
+  document.getElementById('drawerDivCards').innerHTML = ev.div.items.map(x => `
+    <div class="p-2.5 rounded-lg border ${x.triggered ? (isLong ? 'bg-emerald-500/15 border-emerald-500/50' : 'bg-rose-500/15 border-rose-500/50') : 'bg-[#070d19] border-slate-800'}">
+      <div class="flex items-center justify-between">
+        <span class="font-bold font-mono-num ${x.triggered ? 'text-white' : 'text-slate-400'}">${x.key}</span>
+        <span class="text-[10px] text-slate-500">${x.group}</span>
+      </div>
+      <div class="mt-1 text-[11px] font-semibold ${x.triggered ? (isLong ? 'text-emerald-300' : 'text-rose-300') : 'text-slate-600'}">
+        ${x.triggered ? (x.type === 'regular' ? '常規背離 ✓' : '隱藏背離 ✓') + ` (+${x.weight})` : '未觸發'}
+      </div>
+    </div>`).join('');
+
+  switchChartTf(STATE.drawerChartTf);
+}
+
+function drawDrawerChart() {
+  const item = STATE.results.get(STATE.drawerSymbol);
+  if (!item) return;
+  const canvas = document.getElementById('klineCanvas');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.max(300, Math.floor(rect.width * dpr));
+  canvas.height = Math.max(200, Math.floor(rect.height * dpr));
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const W = rect.width, H = rect.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#060a13';
+  ctx.fillRect(0, 0, W, H);
+
+  const candles = (item.tfMap[STATE.drawerChartTf] || []).slice(-75);
+  if (candles.length < 5) {
+    ctx.fillStyle = '#64748b';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('K 線資料不足', W / 2 - 40, H / 2);
+    return;
+  }
+
+  const ev = item[STATE.drawerSide];
+  const sl = item.smcLevels || {};
+
+  const padL = 10, padR = 72, padT = 16, padB = 26;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  let minP = Math.min(...candles.map(c => c.low));
+  let maxP = Math.max(...candles.map(c => c.high));
+  // Include stop/entry/t1 nicely if close to price range
+  const refLevels = [ev.risk.stop, ev.risk.entryLow, ev.risk.entryHigh, ev.risk.t1, ev.risk.t2];
+  for (const lv of refLevels) {
+    if (lv && Math.abs(lv - item.price) / item.price < 0.25) {
+      if (lv < minP) minP = lv;
+      if (lv > maxP) maxP = lv;
+    }
+  }
+  const margin = (maxP - minP) * 0.08 || item.price * 0.01;
+  minP -= margin;
+  maxP += margin;
+
+  const yOf = p => padT + ((maxP - p) / (maxP - minP)) * plotH;
+  const stepX = plotW / candles.length;
+  const barW = Math.max(2, Math.min(9, stepX * 0.68));
+
+  // Horizontal Grid
+  ctx.strokeStyle = 'rgba(30, 44, 69, 0.55)';
+  ctx.lineWidth = 1;
+  ctx.font = '10px "JetBrains Mono", monospace';
+  ctx.fillStyle = '#64748b';
+  for (let g = 0; g <= 4; g++) {
+    const y = padT + (plotH / 4) * g;
+    const p = maxP - ((maxP - minP) / 4) * g;
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(W - padR, y);
+    ctx.stroke();
+    ctx.fillText(fmtPrice(p), W - padR + 5, y + 3);
+  }
+
+  // Entry Zone Shaded Band
+  const yE1 = yOf(ev.risk.entryHigh), yE2 = yOf(ev.risk.entryLow);
+  ctx.fillStyle = 'rgba(6, 182, 212, 0.14)';
+  ctx.fillRect(padL, Math.min(yE1, yE2), plotW, Math.max(2, Math.abs(yE2 - yE1)));
+
+  // Helper to draw key price lines
+  const drawHLine = (price, color, label, dashed = true) => {
+    if (!price || price < minP || price > maxP) return;
+    const y = yOf(price);
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    if (dashed) ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(padL, y);
+    ctx.lineTo(W - padR, y);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.fillText(label, padL + 4, y - 3);
+    ctx.restore();
+  };
+
+  drawHLine(sl.pdh, 'rgba(251, 191, 36, 0.65)', 'PDH');
+  drawHLine(sl.pdl, 'rgba(251, 191, 36, 0.65)', 'PDL');
+  drawHLine(ev.risk.stop, 'rgba(244, 63, 94, 0.9)', 'T.Stop', false);
+  drawHLine(ev.risk.t1, 'rgba(16, 185, 129, 0.75)', 'T1');
+  drawHLine(ev.risk.t2, 'rgba(52, 211, 153, 0.95)', 'T2');
+
+  // EMA 9 & 21 overlays
+  const closes = candles.map(c => c.close);
+  const ema9 = calcEMA(closes, 9);
+  const ema21 = calcEMA(closes, 21);
+  const drawLineArr = (arr, color) => {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.3;
+    let started = false;
+    for (let i = 0; i < arr.length; i++) {
+      if (arr[i] === null) continue;
+      const x = padL + i * stepX + stepX / 2;
+      const y = yOf(arr[i]);
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  };
+  drawLineArr(ema9, 'rgba(56, 189, 248, 0.85)');
+  drawLineArr(ema21, 'rgba(245, 158, 11, 0.85)');
+
+  // Candlesticks
+  candles.forEach((c, i) => {
+    const x = padL + i * stepX + stepX / 2;
+    const isUp = c.close >= c.open;
+    const col = isUp ? '#10b981' : '#f43f5e';
+    ctx.strokeStyle = col;
+    ctx.fillStyle = col;
+    ctx.lineWidth = 1;
+    // Wick
+    ctx.beginPath();
+    ctx.moveTo(x, yOf(c.high));
+    ctx.lineTo(x, yOf(c.low));
+    ctx.stroke();
+    // Body
+    const yOpen = yOf(c.open), yClose = yOf(c.close);
+    const bodyTop = Math.min(yOpen, yClose);
+    const bodyH = Math.max(1.5, Math.abs(yClose - yOpen));
+    ctx.fillRect(x - barW / 2, bodyTop, barW, bodyH);
+  });
+
+  // Hover crosshair
+  if (STATE.chartHoverIdx >= 0 && STATE.chartHoverIdx < candles.length) {
+    const c = candles[STATE.chartHoverIdx];
+    const x = padL + STATE.chartHoverIdx * stepX + stepX / 2;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(x, padT);
+    ctx.lineTo(x, H - padB);
+    ctx.stroke();
+    ctx.restore();
+
+    const dt = new Date(c.time).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+    document.getElementById('chartOhlcReadout').innerHTML =
+      `<span class="text-slate-300">${dt}</span> O:${fmtPrice(c.open)} H:${fmtPrice(c.high)} L:${fmtPrice(c.low)} C:<strong class="${c.close >= c.open ? 'text-emerald-400' : 'text-rose-400'}">${fmtPrice(c.close)}</strong>`;
+  }
+
+  document.getElementById('chartLegendStrip').innerHTML = `
+    <span class="text-sky-400">━ EMA9</span>
+    <span class="text-amber-400">━ EMA21</span>
+    <span class="text-cyan-400">■ Entry 進場區間</span>
+    <span class="text-rose-400">━ T.Stop</span>
+    <span class="text-emerald-400">┄ T1 / T2 止盈</span>
+    <span class="text-amber-300">┄ PDH / PDL</span>`;
+
+  // Bind hover handler once
+  canvas.onmousemove = (e) => {
+    const r = canvas.getBoundingClientRect();
+    const mx = e.clientX - r.left - padL;
+    const idx = Math.floor(mx / stepX);
+    if (idx >= 0 && idx < candles.length && idx !== STATE.chartHoverIdx) {
+      STATE.chartHoverIdx = idx;
+      drawDrawerChart();
+    }
+  };
+  canvas.onmouseleave = () => {
+    STATE.chartHoverIdx = -1;
+    drawDrawerChart();
+  };
+}
+
+function copyTradePlan() {
+  const item = STATE.results.get(STATE.drawerSymbol);
+  if (!item) return;
+  const ev = item[STATE.drawerSide];
+  const lightsStr = ['1h','4h','1d','3d','7d'].map(tf => `${tf}:${item.lights[tf].label}`).join(' | ');
+  const text = [
+    `【Binance 即時量化交易計畫】${item.symbol} (${STATE.drawerSide === 'long' ? '做多 Long' : '做空 Short'})`,
+    `綜合評分: ${ev.total}/100 (${ev.grade}級) | 現價: $${fmtPrice(item.price)}`,
+    `五週期燈號: ${lightsStr}`,
+    `8大背離共振: ${ev.div.count}/8 (${ev.div.items.filter(x => x.triggered).map(x => x.key).join(', ') || '無'})`,
+    `SMC/結構: ${ev.smc.tags.join(', ') || '無'} | ${ev.choch.tag}`,
+    `Entry 進場區間: $${fmtPrice(ev.risk.entryLow)} ~ $${fmtPrice(ev.risk.entryHigh)}`,
+    `T.Stop 止損: $${fmtPrice(ev.risk.stop)}`,
+    `Target 1 / 2 / 3: $${fmtPrice(ev.risk.t1)} / $${fmtPrice(ev.risk.t2)} / $${fmtPrice(ev.risk.t3)} (R:R 1:${ev.risk.rr.toFixed(2)})`
+  ].join('\n');
+  navigator.clipboard.writeText(text).then(() => showToast('✅ 已複製交易計畫到剪貼簿'));
+}
+
+/* ===================== CONTROLS & FORMATTING ===================== */
+
+function switchMarket(m) {
+  if (STATE.market === m) return;
+  STATE.market = m;
+  document.getElementById('btnMarketFutures').className = m === 'futures'
+    ? 'px-2.5 py-1.5 rounded-md font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 transition'
+    : 'px-2.5 py-1.5 rounded-md font-semibold text-slate-400 hover:text-white transition';
+  document.getElementById('btnMarketSpot').className = m === 'spot'
+    ? 'px-2.5 py-1.5 rounded-md font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 transition'
+    : 'px-2.5 py-1.5 rounded-md font-semibold text-slate-400 hover:text-white transition';
+  startFullScan();
+}
+
+function onConfigChange() {
+  STATE.mainTf = document.getElementById('selectMainTf').value;
+  STATE.topN = parseInt(document.getElementById('selectTopN').value, 10) || 150;
+  startFullScan();
+}
+
+function setRadarMode(mode) {
+  STATE.radarMode = mode;
+  const active = {
+    best:  'bg-gradient-to-r from-cyan-600/30 to-emerald-600/30 text-white border-cyan-400/60',
+    long:  'bg-emerald-500/20 text-emerald-300 border-emerald-400/70',
+    short: 'bg-rose-500/20 text-rose-300 border-rose-400/70'
+  };
+  const idle = 'bg-terminal-card text-slate-300 border-terminal-border hover:text-white';
+  document.getElementById('tabModeBest').className  = `px-3.5 py-2 rounded-lg text-xs font-bold transition border ${mode === 'best' ? active.best : idle}`;
+  document.getElementById('tabModeLong').className  = `px-3.5 py-2 rounded-lg text-xs font-bold transition border ${mode === 'long' ? active.long : idle}`;
+  document.getElementById('tabModeShort').className = `px-3.5 py-2 rounded-lg text-xs font-bold transition border ${mode === 'short' ? active.short : idle}`;
+  renderDashboard();
+}
+
+function setViewMode(v) {
+  STATE.viewMode = v;
+  document.getElementById('btnViewTable').className = v === 'table'
+    ? 'px-2.5 py-1.5 rounded-md font-semibold bg-slate-700/80 text-white'
+    : 'px-2.5 py-1.5 rounded-md font-semibold text-slate-400 hover:text-white';
+  document.getElementById('btnViewCard').className = v === 'card'
+    ? 'px-2.5 py-1.5 rounded-md font-semibold bg-slate-700/80 text-white'
+    : 'px-2.5 py-1.5 rounded-md font-semibold text-slate-400 hover:text-white';
+  renderDashboard();
+}
+
+function onSearchInput() {
+  STATE.renderLimit = 80;
+  renderDashboard();
+}
+
+function showMoreRows() {
+  STATE.renderLimit += 80;
+  renderDashboard();
+}
+
+function togglePauseScan() {
+  STATE.isPaused = !STATE.isPaused;
+  updatePauseBtn();
+  setScanStatus(STATE.isPaused ? '已暫停掃描（點擊繼續）' : '繼續掃描幣安真實 K 線...');
+}
+
+function updatePauseBtn() {
+  const btn = document.getElementById('btnPauseScan');
+  if (STATE.isScanning) {
+    btn.classList.remove('hidden');
+    btn.textContent = STATE.isPaused ? '▶ 繼續' : '⏸ 暫停';
+  } else {
+    btn.classList.add('hidden');
+  }
+}
+
+function updateProgressUI() {
+  const pct = STATE.totalToScan ? Math.min(100, Math.round((STATE.completedCount / STATE.totalToScan) * 100)) : 0;
+  document.getElementById('scanProgressBar').style.width = pct + '%';
+  document.getElementById('scanProgressCount').textContent = `${STATE.completedCount} / ${STATE.totalToScan} (${pct}%)`;
+}
+
+function setScanStatus(txt) {
+  document.getElementById('scanStatusText').textContent = txt;
+}
+
+function setupAutoRefresh() {
+  if (STATE.autoRefreshTimer) {
+    clearInterval(STATE.autoRefreshTimer);
+    STATE.autoRefreshTimer = null;
+  }
+  const sec = parseInt(document.getElementById('selectAutoRefresh').value, 10);
+  if (sec > 0) {
+    STATE.autoRefreshTimer = setInterval(() => {
+      if (!STATE.isScanning) startFullScan();
+    }, sec * 1000);
+    showToast(`已啟用每 ${sec / 60} 分鐘自動刷新真實行情`);
+  }
+}
+
+function openSettingsModal() {
+  document.getElementById('inputProxyPrefix').value = STATE.proxyPrefix;
+  document.getElementById('inputConcurrency').value = STATE.concurrency;
+  document.getElementById('settingsModal').classList.remove('hidden');
+  document.getElementById('settingsModal').classList.add('flex');
+}
+
+function closeSettingsModal() {
+  document.getElementById('settingsModal').classList.add('hidden');
+  document.getElementById('settingsModal').classList.remove('flex');
+}
+
+function saveSettings() {
+  STATE.proxyPrefix = document.getElementById('inputProxyPrefix').value.trim();
+  STATE.concurrency = Math.min(8, Math.max(2, parseInt(document.getElementById('inputConcurrency').value, 10) || 5));
+  try {
+    localStorage.setItem('bn_quant_proxy', STATE.proxyPrefix);
+    localStorage.setItem('bn_quant_conc', String(STATE.concurrency));
+  } catch (_) {}
+  closeSettingsModal();
+  startFullScan();
+}
+
+function showErrorBanner(title, detail) {
+  document.getElementById('errorTitle').textContent = title;
+  document.getElementById('errorDetail').textContent = detail;
+  document.getElementById('errorBanner').classList.remove('hidden');
+}
+
+function hideErrorBanner() {
+  document.getElementById('errorBanner').classList.add('hidden');
+}
+
+function showToast(msg, isError = false) {
+  const el = document.getElementById('toastMsg');
+  el.textContent = msg;
+  el.className = `fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-xl text-white text-xs font-bold shadow-xl ${isError ? 'bg-rose-600' : 'bg-emerald-600'}`;
+  el.classList.remove('hidden');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.add('hidden'), 2800);
+}
+
+function fmtPrice(p) {
+  if (p === null || p === undefined || isNaN(p)) return '--';
+  const abs = Math.abs(p);
+  if (abs >= 1000) return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (abs >= 10) return p.toFixed(3);
+  if (abs >= 1) return p.toFixed(4);
+  if (abs >= 0.01) return p.toFixed(5);
+  if (abs >= 0.0001) return p.toFixed(6);
+  return p.toFixed(8);
+}
+
+function fmtVol(v) {
+  if (v >= 1e9) return (v / 1e9).toFixed(2) + 'B';
+  if (v >= 1e6) return (v / 1e6).toFixed(1) + 'M';
+  if (v >= 1e3) return (v / 1e3).toFixed(0) + 'K';
+  return v.toFixed(0);
+}
+
+window.addEventListener('resize', () => {
+  if (STATE.drawerSymbol) drawDrawerChart();
+});
+
+// Boot directly into 100% Real Binance API Scan
+window.addEventListener('DOMContentLoaded', () => {
+  startFullScan();
+});
+</script>
+</body>
+</html>
